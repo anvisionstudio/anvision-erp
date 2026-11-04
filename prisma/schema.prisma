@@ -1,0 +1,357 @@
+// Anvision ERP — 資料模型
+// 開發使用 SQLite；正式上線改 provider = "postgresql" 並設定 DATABASE_URL 即可。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────── 系統 / 權限 ─────────────
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         String    @default("STAFF") // ADMIN | MANAGER | ACCOUNTANT | STAFF
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  sessions     Session[]
+  employee     Employee?
+  tasks        Task[]
+  timeEntries  TimeEntry[]
+  managedProjects Project[] @relation("ProjectManager")
+  auditLogs    AuditLog[]
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  detail    String?
+  createdAt DateTime @default(now())
+}
+
+model Setting {
+  key   String @id
+  value String
+}
+
+model Sequence {
+  key  String @id // 例如 Q-2026、INV-2026
+  next Int    @default(1)
+}
+
+// ───────────── 客戶 / 業務 ─────────────
+
+model Client {
+  id        String    @id @default(cuid())
+  name      String
+  taxId     String?   // 統一編號
+  contact   String?
+  email     String?
+  phone     String?
+  address   String?
+  notes     String?
+  createdAt DateTime  @default(now())
+  quotes    Quote[]
+  projects  Project[]
+  invoices  Invoice[]
+}
+
+model Quote {
+  id         String      @id @default(cuid())
+  number     String      @unique
+  clientId   String
+  client     Client      @relation(fields: [clientId], references: [id])
+  title      String
+  status     String      @default("DRAFT") // DRAFT | SENT | ACCEPTED | REJECTED
+  issueDate  DateTime    @default(now())
+  validUntil DateTime?
+  taxRate    Float       @default(0.05)
+  notes      String?
+  items      QuoteItem[]
+  projectId  String?     @unique
+  project    Project?    @relation(fields: [projectId], references: [id])
+  createdAt  DateTime    @default(now())
+}
+
+model QuoteItem {
+  id          String @id @default(cuid())
+  quoteId     String
+  quote       Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Float  @default(1)
+  unitPrice   Float  @default(0)
+  sort        Int    @default(0)
+}
+
+// ───────────── 專案管理 ─────────────
+
+model Project {
+  id          String      @id @default(cuid())
+  code        String      @unique
+  name        String
+  clientId    String?
+  client      Client?     @relation(fields: [clientId], references: [id])
+  managerId   String?
+  manager     User?       @relation("ProjectManager", fields: [managerId], references: [id])
+  status      String      @default("ACTIVE") // PLANNING | ACTIVE | ON_HOLD | DONE | CANCELLED
+  budget      Float       @default(0)   // 合約金額（未稅）
+  startDate   DateTime?
+  dueDate     DateTime?
+  description String?
+  createdAt   DateTime    @default(now())
+  quote       Quote?
+  tasks       Task[]
+  timeEntries TimeEntry[]
+  invoices    Invoice[]
+  expenses    Expense[]
+  purchaseOrders PurchaseOrder[]
+}
+
+model Task {
+  id         String    @id @default(cuid())
+  projectId  String
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title      String
+  status     String    @default("TODO") // TODO | DOING | REVIEW | DONE
+  assigneeId String?
+  assignee   User?     @relation(fields: [assigneeId], references: [id])
+  dueDate    DateTime?
+  estimateHours Float  @default(0)
+  createdAt  DateTime  @default(now())
+}
+
+model TimeEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  date      DateTime
+  hours     Float
+  note      String?
+  createdAt DateTime @default(now())
+}
+
+// ───────────── 會計 / 財務 ─────────────
+
+model Account {
+  id        String        @id @default(cuid())
+  code      String        @unique
+  name      String
+  type      String        // ASSET | LIABILITY | EQUITY | REVENUE | EXPENSE
+  active    Boolean       @default(true)
+  lines     JournalLine[]
+  expenses  Expense[]
+}
+
+model JournalEntry {
+  id        String        @id @default(cuid())
+  number    String        @unique
+  date      DateTime
+  memo      String
+  source    String        @default("MANUAL") // MANUAL | INVOICE | PAYMENT | EXPENSE | PAYROLL | PURCHASE
+  sourceId  String?
+  lines     JournalLine[]
+  createdAt DateTime      @default(now())
+}
+
+model JournalLine {
+  id        String       @id @default(cuid())
+  entryId   String
+  entry     JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountId String
+  account   Account      @relation(fields: [accountId], references: [id])
+  debit     Float        @default(0)
+  credit    Float        @default(0)
+  memo      String?
+}
+
+model Invoice {
+  id         String        @id @default(cuid())
+  number     String        @unique   // 內部請款單號
+  gui        String?                 // 統一發票號碼
+  clientId   String
+  client     Client        @relation(fields: [clientId], references: [id])
+  projectId  String?
+  project    Project?      @relation(fields: [projectId], references: [id])
+  status     String        @default("DRAFT") // DRAFT | ISSUED | PARTIAL | PAID | VOID
+  issueDate  DateTime      @default(now())
+  dueDate    DateTime?
+  taxRate    Float         @default(0.05)
+  notes      String?
+  items      InvoiceItem[]
+  payments   Payment[]
+  createdAt  DateTime      @default(now())
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Float   @default(1)
+  unitPrice   Float   @default(0)
+  sort        Int     @default(0)
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  invoiceId String
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  date      DateTime
+  amount    Float
+  method    String   @default("轉帳")
+  note      String?
+}
+
+// 費用 / 應付帳款（供應商帳單）
+model Expense {
+  id          String    @id @default(cuid())
+  date        DateTime
+  vendorId    String?
+  vendor      Vendor?   @relation(fields: [vendorId], references: [id])
+  projectId   String?
+  project     Project?  @relation(fields: [projectId], references: [id])
+  accountId   String
+  account     Account   @relation(fields: [accountId], references: [id])
+  description String
+  amount      Float     // 未稅
+  tax         Float     @default(0) // 進項稅額
+  status      String    @default("UNPAID") // UNPAID | PAID
+  dueDate     DateTime?
+  paidDate    DateTime?
+  receiptNo   String?
+  purchaseOrderId String?
+  createdAt   DateTime  @default(now())
+}
+
+// ───────────── 採購 / 庫存 ─────────────
+
+model Vendor {
+  id        String          @id @default(cuid())
+  name      String
+  taxId     String?
+  contact   String?
+  email     String?
+  phone     String?
+  address   String?
+  bankInfo  String?
+  notes     String?
+  createdAt DateTime        @default(now())
+  expenses  Expense[]
+  purchaseOrders PurchaseOrder[]
+}
+
+model PurchaseOrder {
+  id        String        @id @default(cuid())
+  number    String        @unique
+  vendorId  String
+  vendor    Vendor        @relation(fields: [vendorId], references: [id])
+  projectId String?
+  project   Project?      @relation(fields: [projectId], references: [id])
+  status    String        @default("DRAFT") // DRAFT | ORDERED | RECEIVED | CANCELLED
+  orderDate DateTime      @default(now())
+  taxRate   Float         @default(0.05)
+  notes     String?
+  items     PurchaseItem[]
+  createdAt DateTime      @default(now())
+}
+
+model PurchaseItem {
+  id          String         @id @default(cuid())
+  poId        String
+  po          PurchaseOrder  @relation(fields: [poId], references: [id], onDelete: Cascade)
+  itemId      String?
+  item        InventoryItem? @relation(fields: [itemId], references: [id])
+  description String
+  quantity    Float          @default(1)
+  unitPrice   Float          @default(0)
+}
+
+model InventoryItem {
+  id        String          @id @default(cuid())
+  sku       String          @unique
+  name      String
+  category  String?         // 耗材 / 器材 / 印刷品 ...
+  unit      String          @default("個")
+  cost      Float           @default(0)
+  quantity  Float           @default(0)
+  reorderLevel Float        @default(0)
+  location  String?
+  movements StockMovement[]
+  purchaseItems PurchaseItem[]
+}
+
+model StockMovement {
+  id        String        @id @default(cuid())
+  itemId    String
+  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  date      DateTime      @default(now())
+  change    Float         // + 入庫 / - 出庫
+  reason    String        // 採購入庫 / 領用 / 盤點調整
+  refId     String?
+}
+
+// ───────────── 人事 ─────────────
+
+model Employee {
+  id          String         @id @default(cuid())
+  userId      String?        @unique
+  user        User?          @relation(fields: [userId], references: [id])
+  name        String
+  title       String?
+  department  String?
+  email       String?
+  phone       String?
+  hireDate    DateTime?
+  salary      Float          @default(0) // 月薪
+  hourlyCost  Float          @default(0) // 專案成本計算用
+  annualLeave Float          @default(7)
+  status      String         @default("ACTIVE") // ACTIVE | LEFT
+  leaves      LeaveRequest[]
+  payrolls    Payroll[]
+}
+
+model LeaveRequest {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type       String   // 特休 | 病假 | 事假 | 其他
+  startDate  DateTime
+  endDate    DateTime
+  days       Float
+  reason     String?
+  status     String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  createdAt  DateTime @default(now())
+}
+
+model Payroll {
+  id          String   @id @default(cuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  period      String   // 2026-11
+  baseSalary  Float
+  allowance   Float    @default(0)
+  deduction   Float    @default(0) // 勞健保自付、所得稅等
+  netPay      Float
+  status      String   @default("DRAFT") // DRAFT | PAID
+  paidDate    DateTime?
+  @@unique([employeeId, period])
+}
