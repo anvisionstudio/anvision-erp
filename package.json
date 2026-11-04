@@ -10,7 +10,7 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "setup": "prisma db push && tsx prisma/seed.ts",
-    "vercel-build": "prisma generate && DATABASE_URL=file:$PWD/prisma/demo.db prisma db push --skip-generate && DATABASE_URL=file:$PWD/prisma/demo.db tsx prisma/seed.ts && next build"
+    "vercel-build": "node scripts/vercel-build.mjs"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",

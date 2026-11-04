@@ -1,7 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { randomBytes } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
 
@@ -35,14 +35,20 @@ export async function hashPassword(pw: string) {
   return bcrypt.hash(pw, 10);
 }
 
+/**
+ * 無狀態登入：Cookie 內含 userId 與到期時間，以 HMAC 簽章（密碼變更後自動失效）。
+ * 不依賴資料庫中的 Session，因此在多台伺服器（如 Vercel）上也能維持登入。
+ */
+const SECRET = process.env.SESSION_SECRET ?? "anvision-erp-demo-secret-change-me";
+const sign = (payload: string, pwHash: string) => createHmac("sha256", SECRET).update(payload + "|" + pwHash).digest("base64url");
+
 export async function login(email: string, password: string) {
   const user = await db.user.findUnique({ where: { email: email.toLowerCase().trim() } });
   if (!user || !user.active) return false;
   if (!(await bcrypt.compare(password, user.passwordHash))) return false;
-  const id = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + TTL_DAYS * 864e5);
-  await db.session.create({ data: { id, userId: user.id, expiresAt } });
-  (await cookies()).set(COOKIE, id, {
+  const payload = Buffer.from(JSON.stringify({ u: user.id, e: expiresAt.getTime() })).toString("base64url");
+  (await cookies()).set(COOKIE, `${payload}.${sign(payload, user.passwordHash)}`, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -53,18 +59,27 @@ export async function login(email: string, password: string) {
 }
 
 export async function logout() {
-  const jar = await cookies();
-  const sid = jar.get(COOKIE)?.value;
-  if (sid) await db.session.deleteMany({ where: { id: sid } });
-  jar.delete(COOKIE);
+  (await cookies()).delete(COOKIE);
 }
 
 export async function getUser() {
-  const sid = (await cookies()).get(COOKIE)?.value;
-  if (!sid) return null;
-  const s = await db.session.findUnique({ where: { id: sid }, include: { user: { include: { employee: true } } } });
-  if (!s || s.expiresAt < new Date() || !s.user.active) return null;
-  return s.user;
+  const raw = (await cookies()).get(COOKIE)?.value;
+  if (!raw) return null;
+  const [payload, sig] = raw.split(".");
+  if (!payload || !sig) return null;
+  let data: { u: string; e: number };
+  try {
+    data = JSON.parse(Buffer.from(payload, "base64url").toString());
+  } catch {
+    return null;
+  }
+  if (!data.u || !data.e || data.e < Date.now()) return null;
+  const user = await db.user.findUnique({ where: { id: data.u }, include: { employee: true } });
+  if (!user || !user.active) return null;
+  const expected = Buffer.from(sign(payload, user.passwordHash));
+  const given = Buffer.from(sig);
+  if (expected.length !== given.length || !timingSafeEqual(expected, given)) return null;
+  return user;
 }
 export type CurrentUser = NonNullable<Awaited<ReturnType<typeof getUser>>>;
 

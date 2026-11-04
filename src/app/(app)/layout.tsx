@@ -1,6 +1,7 @@
 import { requireUser, can, ROLE_LABEL, type Area, type Role } from "@/lib/auth";
 import { Sidebar, type NavGroup } from "@/components/nav";
 import { logoutAction } from "../actions/auth";
+import { isDemo } from "@/lib/db";
 
 const NAV: { title: string; items: { href: string; label: string; icon: string; area: Area }[] }[] = [
   { title: "總覽", items: [{ href: "/", label: "儀表板", icon: "◎", area: "dashboard" }] },
@@ -64,6 +65,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen">
       <Sidebar groups={groups} user={{ name: user.name, role: ROLE_LABEL[user.role as Role] ?? user.role }} logout={logoutAction} />
       <main className="lg:pl-60">
+        {isDemo && (
+          <div className="no-print bg-amber-50 px-4 py-2 text-center text-xs text-amber-800">
+            示範模式：資料不會永久保存，且可能在不同頁面間不一致。正式使用請在 Vercel 連接資料庫（Storage → Neon）。
+          </div>
+        )}
         <div className="mx-auto max-w-7xl p-4 md:p-8">{children}</div>
       </main>
     </div>

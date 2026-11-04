@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getUser } from "@/lib/auth";
 import LoginForm from "./form";
+import { isDemo } from "@/lib/db";
 
 export default async function LoginPage() {
   if (await getUser()) redirect("/");
@@ -13,6 +14,11 @@ export default async function LoginPage() {
           <p className="mt-1 text-sm text-slate-500">公司內部營運管理系統</p>
         </div>
         <LoginForm />
+        {isDemo && (
+          <div className="mt-6 rounded-md bg-amber-50 p-3 text-xs text-amber-800">
+            示範模式：管理員 admin@anvision.studio / anvision1234。資料不會永久保存。
+          </div>
+        )}
       </div>
     </main>
   );
