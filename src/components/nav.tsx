@@ -8,7 +8,10 @@ export type NavGroup = { title: string; items: { href: string; label: string; ic
 export function Sidebar({ groups, user, logout }: { groups: NavGroup[]; user: { name: string; role: string }; logout: () => Promise<void> }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
-  const active = (href: string) => (href === "/" ? path === "/" : path === href || path.startsWith(href + "/"));
+  // 以最長的相符路徑為準，避免 /settings 與 /settings/import 同時亮起
+  const hrefs = groups.flatMap((g) => g.items.map((i) => i.href));
+  const best = hrefs.filter((h) => (h === "/" ? path === "/" : path === h || path.startsWith(h + "/"))).sort((a, b) => b.length - a.length)[0];
+  const active = (href: string) => href === best;
   return (
     <>
       <div className="no-print sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 lg:hidden">

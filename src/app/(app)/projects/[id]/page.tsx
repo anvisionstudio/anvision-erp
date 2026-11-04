@@ -122,12 +122,12 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
         <div className="grid gap-6 lg:grid-cols-3">
           <Card title="損益試算">
             <dl className="space-y-2 text-sm">
-              {[["合約金額（未稅）", p.budget], ["已請款（未稅）", profit.invoiced], ["直接費用 / 外包", -profit.expenses], [`人工成本（${num(profit.hours, 1)}h）`, -profit.labor]].map(([k, v]) => (
+              {[["合約金額（未稅）", p.budget], [profit.fromLedger ? "帳上收入" : "已請款（未稅）", profit.invoiced], [profit.fromLedger ? "帳上成本" : "直接費用 / 外包", -profit.expenses], [`人工成本（${num(profit.hours, 1)}h）`, -profit.labor]].map(([k, v]) => (
                 <div key={k as string} className="flex justify-between"><dt className="text-slate-500">{k}</dt><dd className="tabular-nums">{twd(v as number)}</dd></div>
               ))}
               <div className="flex justify-between border-t pt-2 font-semibold"><dt>毛利</dt><dd className={profit.profit >= 0 ? "text-emerald-600" : "text-red-600"}>{twd(profit.profit)}</dd></div>
             </dl>
-            <p className="mt-3 text-xs text-slate-400">人工成本 = 工時 × 員工資料中設定的「時薪成本」</p>
+            <p className="mt-3 text-xs text-slate-400">{profit.fromLedger ? `收入與直接成本取自 Excel 日記簿（專案：${p.ref}）。` : ""}人工成本 = 工時 × 員工資料中設定的「時薪成本」</p>
           </Card>
           <Card title="請款單" className="lg:col-span-2" pad={false} actions={<Link href={`/invoices/new?projectId=${p.id}`} className="btn-primary btn-sm">＋ 請款</Link>}>
             {p.invoices.length === 0 ? <Empty /> : <table className="tbl"><tbody>{p.invoices.map((i) => (

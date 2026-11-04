@@ -106,6 +106,7 @@ model QuoteItem {
 model Project {
   id          String      @id @default(cuid())
   code        String      @unique
+  ref         String?     @unique // 對應 Excel「專案簡稱」與日記簿「專案」欄
   name        String
   clientId    String?
   client      Client?     @relation(fields: [clientId], references: [id])
@@ -182,11 +183,13 @@ model JournalLine {
   debit     Float        @default(0)
   credit    Float        @default(0)
   memo      String?
+  project   String?      // 專案標籤（Excel 日記簿「專案」欄）
 }
 
 model Invoice {
   id         String        @id @default(cuid())
   number     String        @unique   // 內部請款單號
+  imported   Boolean       @default(false) // 由 Excel 匯入（不自動過帳）
   gui        String?                 // 統一發票號碼
   clientId   String
   client     Client        @relation(fields: [clientId], references: [id])
@@ -220,6 +223,7 @@ model Payment {
   amount    Float
   method    String   @default("轉帳")
   note      String?
+  imported  Boolean  @default(false)
 }
 
 // 費用 / 應付帳款（供應商帳單）

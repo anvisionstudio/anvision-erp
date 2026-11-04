@@ -6,7 +6,7 @@ import { requireUser, audit } from "@/lib/auth";
 import { str, req, n, dt, items } from "@/lib/form";
 import { nextNumber } from "@/lib/seq";
 import { totals } from "@/lib/format";
-import { postExpense, createEntry, ACC } from "@/lib/ledger";
+import { postExpense, createEntry, resolveAccount, autopostEnabled, ACC } from "@/lib/ledger";
 
 export async function saveVendor(f: FormData) {
   const u = await requireUser("purchasing");
@@ -69,8 +69,9 @@ export async function receivePO(id: string) {
     const po = await tx.purchaseOrder.findUniqueOrThrow({ where: { id }, include: { items: true, vendor: true } });
     if (po.status === "RECEIVED") throw new Error("此採購單已驗收");
     if (po.status === "CANCELLED") throw new Error("已取消的採購單無法驗收");
-    const inv = await tx.account.findUniqueOrThrow({ where: { code: ACC.INVENTORY } });
-    const cost = await tx.account.findUnique({ where: { code: "5102" } });
+    const inv = await resolveAccount(tx, ACC.INVENTORY);
+    const cost = await resolveAccount(tx, ACC.COST);
+    if (!inv) throw new Error("找不到「存貨」會計科目，請先建立或於匯入設定中對應");
     const stockLines = po.items.filter((i) => i.itemId);
     const otherLines = po.items.filter((i) => !i.itemId);
     for (const i of stockLines) {
@@ -148,8 +149,8 @@ export async function adjustStock(f: FormData) {
     });
     // 存貨價值異動過帳：領用 → 製作成本；盤盈/盤虧 → 雜項費用
     const value = Math.round(Math.abs(change) * it.cost);
-    if (value > 0) {
-      const other = mode === "OUT" ? "5102" : "6109";
+    if (value > 0 && (await autopostEnabled(tx))) {
+      const other = mode === "OUT" ? ACC.COST : ACC.MISC;
       const out = change < 0;
       await createEntry(tx, {
         date: new Date(),

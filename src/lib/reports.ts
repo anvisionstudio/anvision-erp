@@ -80,15 +80,33 @@ export async function projectProfit(projectId?: string) {
     },
     orderBy: { createdAt: "desc" },
   });
+  // Excel 匯入的專案：收入 / 成本直接取自日記簿「專案」欄
+  const refs = projects.map((p) => p.ref).filter((r): r is string => !!r);
+  const ledger = new Map<string, { revenue: number; cost: number }>();
+  if (refs.length) {
+    const [sums, accounts] = await Promise.all([
+      db.journalLine.groupBy({ by: ["project", "accountId"], where: { project: { in: refs } }, _sum: { debit: true, credit: true } }),
+      db.account.findMany({ select: { id: true, type: true } }),
+    ]);
+    const type = new Map(accounts.map((a) => [a.id, a.type]));
+    for (const s of sums) {
+      const r = ledger.get(s.project!) ?? { revenue: 0, cost: 0 };
+      const d = s._sum.debit ?? 0, c = s._sum.credit ?? 0;
+      if (type.get(s.accountId) === "REVENUE") r.revenue += c - d;
+      if (type.get(s.accountId) === "EXPENSE") r.cost += d - c;
+      ledger.set(s.project!, r);
+    }
+  }
   return projects.map((p) => {
-    const invoiced = p.invoices.reduce((s, i) => s + totals(i.items, i.taxRate).subtotal, 0);
-    const expenses = p.expenses.reduce((s, e) => s + e.amount, 0);
+    const fromLedger = p.ref ? ledger.get(p.ref) ?? { revenue: 0, cost: 0 } : null;
+    const invoiced = fromLedger ? fromLedger.revenue : p.invoices.reduce((s, i) => s + totals(i.items, i.taxRate).subtotal, 0);
+    const expenses = fromLedger ? fromLedger.cost : p.expenses.reduce((s, e) => s + e.amount, 0);
     const hours = p.timeEntries.reduce((s, t) => s + t.hours, 0);
     const labor = p.timeEntries.reduce((s, t) => s + t.hours * (t.user.employee?.hourlyCost ?? 0), 0);
     const cost = expenses + labor;
     const profit = invoiced - cost;
     return {
-      project: p, invoiced, expenses, hours, labor, cost, profit,
+      project: p, invoiced, expenses, hours, labor, cost, profit, fromLedger: !!fromLedger,
       margin: invoiced > 0 ? profit / invoiced : 0,
       billedPct: p.budget > 0 ? invoiced / p.budget : 0,
     };

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { twd, date, isoDate } from "@/lib/format";
 import { saveExpense, payExpense, deleteExpense } from "@/app/actions/finance";
+import { resolveAccount, ACC } from "@/lib/ledger";
 import { PageHeader, Card, Badge, Empty, Tabs, Field, Select, Stat, statusOptions } from "@/components/ui";
 import { ConfirmButton, SubmitButton } from "@/components/client";
 
@@ -25,7 +26,7 @@ export default async function Expenses({ searchParams }: { searchParams: Promise
   const showForm = sp.new || editing;
   const e = editing;
   const unpaid = expenses.filter((x) => x.status === "UNPAID").reduce((s, x) => s + x.amount + x.tax, 0);
-  const defaultAcc = accounts.find((a) => a.code === "6109")?.id;
+  const defaultAcc = (await resolveAccount(db, ACC.MISC))?.id;
 
   return (
     <>

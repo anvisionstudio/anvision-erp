@@ -2,19 +2,35 @@ import type { Tx } from "./db";
 import { nextNumber } from "./seq";
 import { totals } from "./format";
 
-/** 系統預設會計科目（自動過帳使用） */
+/**
+ * 自動過帳使用的「科目角色」。實際科目代碼由設定 acckey.<角色> 決定
+ * （匯入 Excel 會計項目表時會自動依名稱對應），未設定時使用系統預設代碼。
+ */
 export const ACC = {
-  CASH: "1101",
-  BANK: "1102",
-  AR: "1131",
-  INPUT_VAT: "1141",
-  INVENTORY: "1151",
-  AP: "2101",
-  OUTPUT_VAT: "2111",
-  WITHHOLDING: "2131",
-  REVENUE: "4101",
-  SALARY: "6101",
+  CASH: "CASH",
+  BANK: "BANK",
+  AR: "AR",
+  INPUT_VAT: "INPUT_VAT",
+  INVENTORY: "INVENTORY",
+  AP: "AP",
+  OUTPUT_VAT: "OUTPUT_VAT",
+  WITHHOLDING: "WITHHOLDING",
+  REVENUE: "REVENUE",
+  SALARY: "SALARY",
+  COST: "COST",
+  MISC: "MISC",
 } as const;
+export type AccKey = keyof typeof ACC;
+
+export const ACC_DEFAULT_CODE: Record<AccKey, string> = {
+  CASH: "1101", BANK: "1102", AR: "1131", INPUT_VAT: "1141", INVENTORY: "1151", AP: "2101",
+  OUTPUT_VAT: "2111", WITHHOLDING: "2131", REVENUE: "4101", SALARY: "6101", COST: "5102", MISC: "6109",
+};
+
+export const ACC_LABEL: Record<AccKey, string> = {
+  CASH: "現金", BANK: "銀行存款（收付款）", AR: "應收帳款", INPUT_VAT: "進項稅額", INVENTORY: "存貨", AP: "應付帳款",
+  OUTPUT_VAT: "銷項稅額", WITHHOLDING: "代扣款項", REVENUE: "營業收入", SALARY: "薪資支出", COST: "製作 / 外包成本", MISC: "雜項費用",
+};
 
 export const DEFAULT_ACCOUNTS: [string, string, string][] = [
   ["1101", "現金", "ASSET"],
@@ -55,10 +71,26 @@ export const ACCOUNT_TYPE_LABEL: Record<string, string> = {
 
 type LineIn = { code?: string; accountId?: string; debit?: number; credit?: number; memo?: string };
 
+/** 依「科目角色」（如 ACC.AR）或會計代碼取得科目 */
+export async function resolveAccount(tx: Tx, keyOrCode: string) {
+  if (keyOrCode in ACC_DEFAULT_CODE) {
+    const key = keyOrCode as AccKey;
+    const m = await tx.setting.findUnique({ where: { key: `acckey.${key}` } });
+    return tx.account.findUnique({ where: { code: m?.value ?? ACC_DEFAULT_CODE[key] } });
+  }
+  return tx.account.findUnique({ where: { code: keyOrCode } });
+}
+
 async function accountId(tx: Tx, code: string) {
-  const a = await tx.account.findUnique({ where: { code } });
-  if (!a) throw new Error(`找不到會計科目 ${code}，請先至「會計科目」建立`);
+  const a = await resolveAccount(tx, code);
+  if (!a) throw new Error(`找不到會計科目 ${code}，請先至「會計科目」建立或於匯入設定中對應`);
   return a.id;
+}
+
+/** 自動過帳開關：以 Excel 為帳務主檔時關閉，避免重複入帳 */
+export async function autopostEnabled(tx: Tx) {
+  const s = await tx.setting.findUnique({ where: { key: "ledger.autopost" } });
+  return s?.value !== "false";
 }
 
 /** 建立傳票（借貸必須平衡） */
@@ -95,9 +127,10 @@ async function clear(tx: Tx, source: string, sourceId: string) {
 
 /** 請款單開立 → 借 應收帳款 / 貸 收入、銷項稅額 */
 export async function postInvoice(tx: Tx, invoiceId: string) {
+  if (!(await autopostEnabled(tx))) return;
   await clear(tx, "INVOICE", invoiceId);
   const inv = await tx.invoice.findUniqueOrThrow({ where: { id: invoiceId }, include: { items: true, client: true } });
-  if (inv.status === "DRAFT" || inv.status === "VOID") return;
+  if (inv.imported || inv.status === "DRAFT" || inv.status === "VOID") return;
   const t = totals(inv.items, inv.taxRate);
   await createEntry(tx, {
     date: inv.issueDate,
@@ -114,9 +147,10 @@ export async function postInvoice(tx: Tx, invoiceId: string) {
 
 /** 收款 → 借 銀行存款 / 貸 應收帳款 */
 export async function postPayment(tx: Tx, paymentId: string) {
+  if (!(await autopostEnabled(tx))) return;
   await clear(tx, "PAYMENT", paymentId);
   const p = await tx.payment.findUnique({ where: { id: paymentId }, include: { invoice: true } });
-  if (!p) return;
+  if (!p || p.imported || p.invoice.imported) return;
   await createEntry(tx, {
     date: p.date,
     memo: `收款 ${p.invoice.number}`,
@@ -146,6 +180,7 @@ export async function refreshInvoiceStatus(tx: Tx, invoiceId: string) {
 
 /** 費用 / 帳單 → 借 費用、進項稅額 / 貸 應付帳款；付款 → 借 應付帳款 / 貸 銀行存款 */
 export async function postExpense(tx: Tx, expenseId: string) {
+  if (!(await autopostEnabled(tx))) return;
   await clear(tx, "EXPENSE", expenseId);
   await clear(tx, "EXPENSE_PAY", expenseId);
   const e = await tx.expense.findUnique({ where: { id: expenseId }, include: { vendor: true } });
@@ -184,6 +219,7 @@ export async function removeExpenseEntries(tx: Tx, expenseId: string) {
 
 /** 薪資發放 → 借 薪資支出 / 貸 銀行存款、代扣款項 */
 export async function postPayroll(tx: Tx, payrollId: string) {
+  if (!(await autopostEnabled(tx))) return;
   await clear(tx, "PAYROLL", payrollId);
   const p = await tx.payroll.findUniqueOrThrow({ where: { id: payrollId }, include: { employee: true } });
   if (p.status !== "PAID") return;

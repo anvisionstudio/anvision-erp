@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { twd, date, num, isoDate } from "@/lib/format";
 import { profitAndLoss, balanceSheet, accountBalances, arAging, projectProfit } from "@/lib/reports";
-import { ACC, ACCOUNT_TYPE_LABEL } from "@/lib/ledger";
+import { ACC, ACCOUNT_TYPE_LABEL, resolveAccount } from "@/lib/ledger";
 import { PageHeader, Card, Tabs, Stat, Badge, Empty } from "@/components/ui";
 import { PrintButton } from "@/components/client";
 
@@ -155,28 +155,41 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
 
       {tab === "vat" && await (async () => {
         const year = Number(sp.year ?? now.getFullYear());
-        const [out, inp] = await Promise.all([ACC.OUTPUT_VAT, ACC.INPUT_VAT].map((code) => db.account.findUnique({ where: { code } })));
+        const [out, inp] = await Promise.all([ACC.OUTPUT_VAT, ACC.INPUT_VAT].map((code) => resolveAccount(db, code)));
         const periods = await Promise.all([0, 2, 4, 6, 8, 10].map(async (m) => {
           const s = new Date(year, m, 1), e = new Date(year, m + 2, 1);
-          const sum = async (id?: string) => {
-            if (!id) return { d: 0, c: 0 };
-            const r = await db.journalLine.aggregate({ _sum: { debit: true, credit: true }, where: { accountId: id, entry: { date: { gte: s, lt: e } } } });
-            return { d: r._sum.debit ?? 0, c: r._sum.credit ?? 0 };
+          const sum = async (id: string | undefined, field: "debit" | "credit") => {
+            if (!id) return 0;
+            const r = await db.journalLine.aggregate({ _sum: { [field]: true }, where: { accountId: id, entry: { date: { gte: s, lt: e } } } });
+            return (r._sum as Record<string, number | null>)[field] ?? 0;
           };
-          const o = await sum(out?.id), i = await sum(inp?.id);
-          const output = o.c - o.d, input = i.d - i.c;
+          const output = await sum(out?.id, "credit"), input = await sum(inp?.id, "debit");
           return { label: `${m + 1}–${m + 2} 月`, output, input, payable: output - input };
         }));
+        type Vat = { period: string; output: number | null; input: number | null; inputInternal: number | null; estimated: number | null; diff: number | null; paid: number | null; carry: number | null; note: string | null };
+        const raw = (await db.setting.findUnique({ where: { key: "import.vat" } }))?.value;
+        const filed: Vat[] = raw ? (JSON.parse(raw) as Vat[]).filter((v) => v.period.startsWith(String(year))) : [];
+        const n = (v: number | null) => (v === null ? "—" : twd(v));
         return (<>
           <form className="no-print mb-4 flex gap-2"><input type="hidden" name="tab" value="vat" /><input type="number" name="year" defaultValue={year} className="input w-28" /><button className="btn-secondary">年度</button></form>
-          <Card title={`${year} 年營業稅（401 申報參考）`} pad={false}>
+          {filed.length > 0 && (
+            <Card title={`${year} 年營業稅申報（Excel 發票資料）`} pad={false} className="mb-6">
+              <table className="tbl">
+                <thead><tr><th>期別</th><th className="text-right">銷項稅額</th><th className="text-right">進項稅額</th><th className="text-right">進項稅額-內帳</th><th className="text-right">預計應納</th><th className="text-right">與會計師差異</th><th className="text-right">實繳</th><th className="text-right">留底</th></tr></thead>
+                <tbody>{filed.map((v) => (
+                  <tr key={v.period}><td>{v.period}{v.note && <div className="text-xs text-slate-400">{v.note}</div>}</td><td className="num">{n(v.output)}</td><td className="num">{n(v.input)}</td><td className="num">{n(v.inputInternal)}</td><td className="num">{n(v.estimated)}</td><td className="num">{n(v.diff)}</td><td className="num font-medium">{n(v.paid)}</td><td className="num">{n(v.carry)}</td></tr>
+                ))}</tbody>
+              </table>
+            </Card>
+          )}
+          <Card title={`${year} 年營業稅（帳上參考，依傳票日期）`} pad={false}>
             <table className="tbl">
-              <thead><tr><th>期別</th><th className="text-right">銷項稅額</th><th className="text-right">進項稅額</th><th className="text-right">應納（溢付）稅額</th></tr></thead>
+              <thead><tr><th>期別</th><th className="text-right">銷項稅額（貸方）</th><th className="text-right">進項稅額（借方）</th><th className="text-right">差額</th></tr></thead>
               <tbody>{periods.map((p) => (
                 <tr key={p.label}><td>{p.label}</td><td className="num">{twd(p.output)}</td><td className="num">{twd(p.input)}</td><td className={`num font-medium ${p.payable < 0 ? "text-emerald-600" : ""}`}>{twd(p.payable)}</td></tr>
               ))}</tbody>
             </table>
-            <p className="p-4 text-xs text-slate-400">依傳票中「銷項稅額」與「進項稅額」科目彙總，實際申報請以發票明細與會計師確認為準。</p>
+            <p className="p-4 text-xs text-slate-400">依傳票入帳日期彙總「銷項稅額」貸方與「進項稅額」借方（不含繳稅沖轉），與實際申報期別可能不同；申報請以上方 Excel 發票資料或會計師為準。</p>
           </Card>
         </>);
       })()}
