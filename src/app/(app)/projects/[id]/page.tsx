@@ -27,6 +27,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
       timeEntries: { include: { user: true }, orderBy: { date: "desc" } },
       invoices: { include: { items: true }, orderBy: { issueDate: "desc" } },
       expenses: { include: { vendor: true }, orderBy: { date: "desc" } },
+      meetings: { orderBy: { date: "desc" } },
     },
   });
   if (!p) notFound();
@@ -41,6 +42,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
     { key: "tasks", label: `任務 (${p.tasks.length})`, href: base + "tasks" },
     { key: "timeline", label: "時間軸", href: base + "timeline" },
     { key: "time", label: `工時 (${num(hours, 1)}h)`, href: base + "time" },
+    { key: "meetings", label: `會議記錄 (${p.meetings.length})`, href: base + "meetings" },
     ...(finance ? [{ key: "finance", label: "財務", href: base + "finance" }] : []),
     ...(manage ? [{ key: "settings", label: "專案設定", href: base + "settings" }] : []),
   ];
@@ -141,6 +143,25 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
             )}
           </Card>
         </div>
+      )}
+
+      {tab === "meetings" && (
+        <Card title="會議記錄" pad={false}
+          actions={<div className="flex gap-2"><Link className="btn-secondary btn-sm" href={`/meetings/new?kind=NOTE&project=${p.id}`}>做筆記</Link><Link className="btn-primary btn-sm" href={`/meetings/new?project=${p.id}`}>新增會議記錄</Link></div>}>
+          {p.meetings.length === 0 ? <Empty>這個專案還沒有會議記錄</Empty> : (
+            <table className="tbl">
+              <thead><tr><th>討論主題</th><th>會議時間</th><th className="min-w-[14rem]">決策</th><th className="min-w-[14rem]">未來行動項目</th></tr></thead>
+              <tbody>{p.meetings.map((m) => (
+                <tr key={m.id} className="align-top">
+                  <td><Link className="link font-medium" href={`/meetings/${m.id}`}>{m.title}</Link>{m.kind === "NOTE" && <div className="mt-1"><Badge label="筆記" tone="amber" /></div>}</td>
+                  <td className="whitespace-nowrap text-xs">{date(m.date)}</td>
+                  <td className="text-xs"><div className="line-clamp-4 whitespace-pre-line">{m.decisions ?? m.summary ?? ""}</div></td>
+                  <td className="text-xs"><div className="line-clamp-4 whitespace-pre-line">{m.actions ?? ""}</div></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
+        </Card>
       )}
 
       {tab === "finance" && profit && (

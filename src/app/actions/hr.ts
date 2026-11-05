@@ -1,4 +1,5 @@
 "use server";
+import { guard } from "@/lib/guard";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireUser, audit, can } from "@/lib/auth";
@@ -35,19 +36,23 @@ export async function requestLeave(f: FormData) {
 }
 
 export async function reviewLeave(id: string, status: "APPROVED" | "REJECTED") {
-  const u = await requireUser("leave");
-  if (!(can(u, "hr") || u.role === "MANAGER")) throw new Error("權限不足");
-  await db.leaveRequest.update({ where: { id }, data: { status } });
-  await audit(u.id, status === "APPROVED" ? "核准" : "駁回", "請假", id);
-  revalidatePath("/hr/leave");
+  return guard(async () => {
+    const u = await requireUser("leave");
+    if (!(can(u, "hr") || u.role === "MANAGER")) throw new Error("權限不足");
+    await db.leaveRequest.update({ where: { id }, data: { status } });
+    await audit(u.id, status === "APPROVED" ? "核准" : "駁回", "請假", id);
+    revalidatePath("/hr/leave");
+  });
 }
 
 export async function deleteLeave(id: string) {
-  const u = await requireUser("leave");
-  const l = await db.leaveRequest.findUniqueOrThrow({ where: { id } });
-  if (!can(u, "hr") && (l.employeeId !== u.employee?.id || l.status !== "PENDING")) throw new Error("只能撤回自己待審核的假單");
-  await db.leaveRequest.delete({ where: { id } });
-  revalidatePath("/hr/leave");
+  return guard(async () => {
+    const u = await requireUser("leave");
+    const l = await db.leaveRequest.findUniqueOrThrow({ where: { id } });
+    if (!can(u, "hr") && (l.employeeId !== u.employee?.id || l.status !== "PENDING")) throw new Error("只能撤回自己待審核的假單");
+    await db.leaveRequest.delete({ where: { id } });
+    revalidatePath("/hr/leave");
+  });
 }
 
 // ── 薪資 ──
@@ -81,11 +86,13 @@ export async function savePayroll(f: FormData) {
 }
 
 export async function payPayroll(id: string) {
-  const u = await requireUser("hr");
-  await db.$transaction(async (tx) => {
-    await tx.payroll.update({ where: { id }, data: { status: "PAID", paidDate: new Date() } });
-    await postPayroll(tx, id);
+  return guard(async () => {
+    const u = await requireUser("hr");
+    await db.$transaction(async (tx) => {
+      await tx.payroll.update({ where: { id }, data: { status: "PAID", paidDate: new Date() } });
+      await postPayroll(tx, id);
+    });
+    await audit(u.id, "發放", "薪資", id);
+    revalidatePath("/hr/payroll");
   });
-  await audit(u.id, "發放", "薪資", id);
-  revalidatePath("/hr/payroll");
 }

@@ -1,4 +1,5 @@
 "use server";
+import { guard } from "@/lib/guard";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
@@ -25,12 +26,40 @@ export async function saveClient(f: FormData) {
 }
 
 export async function deleteClient(id: string) {
+  return guard(async () => {
+    const u = await requireUser("sales");
+    const used = await db.client.findUnique({ where: { id }, include: { _count: { select: { quotes: true, invoices: true, projects: true } } } });
+    if (used && used._count.quotes + used._count.invoices + used._count.projects > 0) throw new Error(`此客戶已有 ${[used._count.projects && `${used._count.projects} 個專案`, used._count.quotes && `${used._count.quotes} 張報價單`, used._count.invoices && `${used._count.invoices} 張請款單`].filter(Boolean).join("、")}，無法直接刪除。請用下方「合併到其他客戶」把紀錄移過去後再刪除。`);
+    await db.client.delete({ where: { id } });
+    await audit(u.id, "刪除", "客戶", id);
+    redirect("/clients");
+  });
+}
+
+/** 合併客戶：把來源客戶的專案、報價、請款移到目標客戶，補齊目標空白欄位、合併別名，再刪除來源 */
+export async function mergeClient(f: FormData) {
   const u = await requireUser("sales");
-  const used = await db.client.findUnique({ where: { id }, include: { _count: { select: { quotes: true, invoices: true, projects: true } } } });
-  if (used && used._count.quotes + used._count.invoices + used._count.projects > 0) throw new Error("此客戶已有報價、專案或請款紀錄，無法刪除");
-  await db.client.delete({ where: { id } });
-  await audit(u.id, "刪除", "客戶", id);
-  redirect("/clients");
+  const sourceId = req(f, "sourceId"), targetId = req(f, "targetId");
+  if (sourceId === targetId) throw new Error("不能合併到自己");
+  const target = await db.$transaction(async (tx) => {
+    const src = await tx.client.findUniqueOrThrow({ where: { id: sourceId } });
+    const dst = await tx.client.findUniqueOrThrow({ where: { id: targetId } });
+    await tx.project.updateMany({ where: { clientId: sourceId }, data: { clientId: targetId } });
+    await tx.quote.updateMany({ where: { clientId: sourceId }, data: { clientId: targetId } });
+    await tx.invoice.updateMany({ where: { clientId: sourceId }, data: { clientId: targetId } });
+    const split = (x: string | null) => (x ?? "").split(/[、,，]\s*/).map((y) => y.trim()).filter(Boolean);
+    const aliases = [...new Set([...split(dst.aliases), ...[src.name, ...split(src.aliases)].filter((x) => x !== dst.name)])].join("、");
+    const fill = (k: "taxId" | "contact" | "email" | "phone" | "address" | "website" | "notes") => dst[k] || src[k];
+    await tx.client.update({
+      where: { id: targetId },
+      data: { aliases: aliases || null, taxId: fill("taxId"), contact: fill("contact"), email: fill("email"), phone: fill("phone"), address: fill("address"), website: fill("website"), notes: fill("notes") },
+    });
+    await tx.client.delete({ where: { id: sourceId } });
+    return dst;
+  });
+  await audit(u.id, "合併", "客戶", targetId, `併入「${target.name}」`);
+  revalidatePath("/clients");
+  redirect(`/clients/${targetId}`);
 }
 
 // ── 報價單 ──
@@ -60,54 +89,62 @@ export async function saveQuote(f: FormData) {
 }
 
 export async function setQuoteStatus(id: string, status: string) {
-  const u = await requireUser("sales");
-  await db.quote.update({ where: { id }, data: { status } });
-  await audit(u.id, "狀態 → " + status, "報價單", id);
-  revalidatePath(`/quotes/${id}`);
+  return guard(async () => {
+    const u = await requireUser("sales");
+    await db.quote.update({ where: { id }, data: { status } });
+    await audit(u.id, "狀態 → " + status, "報價單", id);
+    revalidatePath(`/quotes/${id}`);
+  });
 }
 
 export async function deleteQuote(id: string) {
-  const u = await requireUser("sales");
-  await db.quote.delete({ where: { id } });
-  await audit(u.id, "刪除", "報價單", id);
-  redirect("/quotes");
+  return guard(async () => {
+    const u = await requireUser("sales");
+    await db.quote.delete({ where: { id } });
+    await audit(u.id, "刪除", "報價單", id);
+    redirect("/quotes");
+  });
 }
 
 /** 成交報價 → 建立專案 */
 export async function quoteToProject(id: string) {
-  const u = await requireUser("sales");
-  const q = await db.quote.findUniqueOrThrow({ where: { id }, include: { items: true } });
-  if (q.projectId) redirect(`/projects/${q.projectId}`);
-  const p = await db.$transaction(async (tx) => {
-    const project = await tx.project.create({
-      data: {
-        code: await nextNumber(tx, "P"), name: q.title, clientId: q.clientId, managerId: u.id,
-        budget: totals(q.items, q.taxRate).subtotal, startDate: new Date(), description: q.notes,
-      },
+  return guard(async () => {
+    const u = await requireUser("sales");
+    const q = await db.quote.findUniqueOrThrow({ where: { id }, include: { items: true } });
+    if (q.projectId) redirect(`/projects/${q.projectId}`);
+    const p = await db.$transaction(async (tx) => {
+      const project = await tx.project.create({
+        data: {
+          code: await nextNumber(tx, "P"), name: q.title, clientId: q.clientId, managerId: u.id,
+          budget: totals(q.items, q.taxRate).subtotal, startDate: new Date(), description: q.notes,
+        },
+      });
+      await tx.quote.update({ where: { id }, data: { projectId: project.id, status: "ACCEPTED" } });
+      return project;
     });
-    await tx.quote.update({ where: { id }, data: { projectId: project.id, status: "ACCEPTED" } });
-    return project;
+    await audit(u.id, "報價轉專案", "專案", p.id, `${q.number} → ${p.code}`);
+    redirect(`/projects/${p.id}`);
   });
-  await audit(u.id, "報價轉專案", "專案", p.id, `${q.number} → ${p.code}`);
-  redirect(`/projects/${p.id}`);
 }
 
 /** 報價 → 請款單（可指定請款比例，例如訂金 50%） */
 export async function quoteToInvoice(id: string, ratio: number) {
-  const u = await requireUser("finance");
-  const q = await db.quote.findUniqueOrThrow({ where: { id }, include: { items: true } });
-  const label = ratio < 1 ? `（${Math.round(ratio * 100)}%）` : "";
-  const inv = await db.$transaction(async (tx) =>
-    tx.invoice.create({
-      data: {
-        number: await nextNumber(tx, "INV"), clientId: q.clientId, projectId: q.projectId, taxRate: q.taxRate,
-        dueDate: new Date(Date.now() + 30 * 864e5), notes: `依報價單 ${q.number}`,
-        items: { create: q.items.map((i) => ({ description: i.isGroup ? i.description : i.description + label, quantity: i.quantity, unitPrice: Math.round(i.unitPrice * ratio), unit: i.unit, isGroup: i.isGroup, sort: i.sort })) },
-      },
-    }),
-  );
-  await audit(u.id, "報價轉請款", "請款單", inv.id, `${q.number} → ${inv.number}`);
-  redirect(`/invoices/${inv.id}`);
+  return guard(async () => {
+    const u = await requireUser("finance");
+    const q = await db.quote.findUniqueOrThrow({ where: { id }, include: { items: true } });
+    const label = ratio < 1 ? `（${Math.round(ratio * 100)}%）` : "";
+    const inv = await db.$transaction(async (tx) =>
+      tx.invoice.create({
+        data: {
+          number: await nextNumber(tx, "INV"), clientId: q.clientId, projectId: q.projectId, taxRate: q.taxRate,
+          dueDate: new Date(Date.now() + 30 * 864e5), notes: `依報價單 ${q.number}`,
+          items: { create: q.items.map((i) => ({ description: i.isGroup ? i.description : i.description + label, quantity: i.quantity, unitPrice: Math.round(i.unitPrice * ratio), unit: i.unit, isGroup: i.isGroup, sort: i.sort })) },
+        },
+      }),
+    );
+    await audit(u.id, "報價轉請款", "請款單", inv.id, `${q.number} → ${inv.number}`);
+    redirect(`/invoices/${inv.id}`);
+  });
 }
 
 export type ClientCsvState = { ok?: string; error?: string } | null;

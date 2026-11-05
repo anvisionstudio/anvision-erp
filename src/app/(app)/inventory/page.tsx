@@ -5,12 +5,20 @@ import { saveItem, adjustStock } from "@/app/actions/purchasing";
 import { PageHeader, Card, Empty, Field, Select, Stat, Badge } from "@/components/ui";
 import { SubmitButton } from "@/components/client";
 import Link from "next/link";
+import { FilterBar } from "@/components/filters";
+import { pick } from "@/lib/filters";
 
-export default async function Inventory({ searchParams }: { searchParams: Promise<{ edit?: string; item?: string }> }) {
+export default async function Inventory({ searchParams }: { searchParams: Promise<{ edit?: string; item?: string; q?: string; cat?: string; stock?: string }> }) {
   const user = await requireUser("inventory");
   const sp = await searchParams;
   const manage = can(user, "purchasing");
-  const items = await db.inventoryItem.findMany({ orderBy: [{ category: "asc" }, { sku: "asc" }] });
+  const all = await db.inventoryItem.findMany({ orderBy: [{ category: "asc" }, { sku: "asc" }] });
+  const f = pick(sp, ["q", "cat", "stock"]);
+  const categories = [...new Set(all.map((i) => i.category).filter((c): c is string => !!c))].sort();
+  const items = all.filter((i) =>
+    (!f.cat || i.category === f.cat) &&
+    (!f.q || [i.sku, i.name, i.location].some((x) => x?.includes(f.q!))) &&
+    (f.stock === "low" ? i.reorderLevel > 0 && i.quantity <= i.reorderLevel : f.stock === "zero" ? i.quantity <= 0 : true));
   const e = sp.edit ? items.find((i) => i.id === sp.edit) : undefined;
   const moves = await db.stockMovement.findMany({ where: sp.item ? { itemId: sp.item } : undefined, include: { item: true }, orderBy: { date: "desc" }, take: 30 });
   const value = items.reduce((s, i) => s + i.quantity * i.cost, 0);
@@ -23,6 +31,11 @@ export default async function Inventory({ searchParams }: { searchParams: Promis
         {manage && <Stat label="庫存總值" value={twd(value)} />}
         <Stat label="低於安全存量" value={low.length} tone={low.length ? "bad" : undefined} />
       </div>
+      <FilterBar path="/inventory" values={f} fields={[
+        { type: "search", name: "q", label: "搜尋", placeholder: "SKU、品名、位置…" },
+        { type: "select", name: "cat", label: "分類", options: categories.map((c) => ({ value: c, label: c })) },
+        { type: "select", name: "stock", label: "庫存", options: [{ value: "low", label: "低於安全存量" }, { value: "zero", label: "無庫存" }] },
+      ]} />
       <div className="grid gap-6 lg:grid-cols-3">
         <Card title="品項" pad={false} className="lg:col-span-2">
           {items.length === 0 ? <Empty /> : (

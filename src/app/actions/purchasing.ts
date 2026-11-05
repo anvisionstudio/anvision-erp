@@ -1,4 +1,5 @@
 "use server";
+import { guard } from "@/lib/guard";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
@@ -63,13 +64,15 @@ export async function importVendorsCsv(_: CsvState, f: FormData): Promise<CsvSta
 }
 
 export async function deleteVendor(id: string) {
-  const u = await requireUser("purchasing");
-  const v = await db.vendor.findUniqueOrThrow({ where: { id }, include: { _count: { select: { expenses: true, purchaseOrders: true } } } });
-  if (v._count.expenses + v._count.purchaseOrders > 0) throw new Error("此供應商已有交易紀錄，無法刪除");
-  await db.vendor.delete({ where: { id } });
-  await audit(u.id, "刪除", "供應商", id, v.name);
-  revalidatePath("/vendors");
-  redirect("/vendors");
+  return guard(async () => {
+    const u = await requireUser("purchasing");
+    const v = await db.vendor.findUniqueOrThrow({ where: { id }, include: { _count: { select: { expenses: true, purchaseOrders: true } } } });
+    if (v._count.expenses + v._count.purchaseOrders > 0) throw new Error("此供應商已有交易紀錄，無法刪除");
+    await db.vendor.delete({ where: { id } });
+    await audit(u.id, "刪除", "供應商", id, v.name);
+    revalidatePath("/vendors");
+    redirect("/vendors");
+  });
 }
 
 // ── 採購單 ──
@@ -96,63 +99,69 @@ export async function savePO(f: FormData) {
 }
 
 export async function setPOStatus(id: string, status: "ORDERED" | "CANCELLED" | "DRAFT") {
-  const u = await requireUser("purchasing");
-  const po = await db.purchaseOrder.findUniqueOrThrow({ where: { id } });
-  if (po.status === "RECEIVED") throw new Error("已到貨的採購單無法變更");
-  await db.purchaseOrder.update({ where: { id }, data: { status } });
-  await audit(u.id, "狀態 → " + status, "採購單", id, po.number);
-  revalidatePath(`/purchases/${id}`);
+  return guard(async () => {
+    const u = await requireUser("purchasing");
+    const po = await db.purchaseOrder.findUniqueOrThrow({ where: { id } });
+    if (po.status === "RECEIVED") throw new Error("已到貨的採購單無法變更");
+    await db.purchaseOrder.update({ where: { id }, data: { status } });
+    await audit(u.id, "狀態 → " + status, "採購單", id, po.number);
+    revalidatePath(`/purchases/${id}`);
+  });
 }
 
 /** 驗收到貨：庫存品項入庫、產生應付帳款（庫存品記入「存貨」，其餘依專案記外包/製作成本） */
 export async function receivePO(id: string) {
-  const u = await requireUser("purchasing");
-  await db.$transaction(async (tx) => {
-    const po = await tx.purchaseOrder.findUniqueOrThrow({ where: { id }, include: { items: true, vendor: true } });
-    if (po.status === "RECEIVED") throw new Error("此採購單已驗收");
-    if (po.status === "CANCELLED") throw new Error("已取消的採購單無法驗收");
-    const inv = await resolveAccount(tx, ACC.INVENTORY);
-    const cost = await resolveAccount(tx, ACC.COST);
-    if (!inv) throw new Error("找不到「存貨」會計科目，請先建立或於匯入設定中對應");
-    const stockLines = po.items.filter((i) => i.itemId);
-    const otherLines = po.items.filter((i) => !i.itemId);
-    for (const i of stockLines) {
-      const item = await tx.inventoryItem.findUniqueOrThrow({ where: { id: i.itemId! } });
-      // 移動平均成本
-      const newQty = item.quantity + i.quantity;
-      const newCost = newQty > 0 ? (item.quantity * item.cost + i.quantity * i.unitPrice) / newQty : i.unitPrice;
-      await tx.inventoryItem.update({ where: { id: item.id }, data: { quantity: newQty, cost: Math.round(newCost * 100) / 100 } });
-      await tx.stockMovement.create({ data: { itemId: item.id, change: i.quantity, reason: `採購入庫 ${po.number}`, refId: po.id } });
-    }
-    const bill = async (lines: typeof po.items, accountId: string, label: string) => {
-      if (!lines.length) return;
-      const t = totals(lines, po.taxRate);
-      const e = await tx.expense.create({
-        data: {
-          date: new Date(), vendorId: po.vendorId, projectId: po.projectId, accountId,
-          description: `${po.number} ${label}`, amount: t.subtotal, tax: t.tax, status: "UNPAID",
-          dueDate: new Date(Date.now() + 30 * 864e5), purchaseOrderId: po.id,
-        },
-      });
-      await postExpense(tx, e.id);
-    };
-    await bill(stockLines, inv.id, "庫存採購");
-    await bill(otherLines, (cost ?? inv).id, "採購");
-    await tx.purchaseOrder.update({ where: { id }, data: { status: "RECEIVED" } });
+  return guard(async () => {
+    const u = await requireUser("purchasing");
+    await db.$transaction(async (tx) => {
+      const po = await tx.purchaseOrder.findUniqueOrThrow({ where: { id }, include: { items: true, vendor: true } });
+      if (po.status === "RECEIVED") throw new Error("此採購單已驗收");
+      if (po.status === "CANCELLED") throw new Error("已取消的採購單無法驗收");
+      const inv = await resolveAccount(tx, ACC.INVENTORY);
+      const cost = await resolveAccount(tx, ACC.COST);
+      if (!inv) throw new Error("找不到「存貨」會計科目，請先建立或於匯入設定中對應");
+      const stockLines = po.items.filter((i) => i.itemId);
+      const otherLines = po.items.filter((i) => !i.itemId);
+      for (const i of stockLines) {
+        const item = await tx.inventoryItem.findUniqueOrThrow({ where: { id: i.itemId! } });
+        // 移動平均成本
+        const newQty = item.quantity + i.quantity;
+        const newCost = newQty > 0 ? (item.quantity * item.cost + i.quantity * i.unitPrice) / newQty : i.unitPrice;
+        await tx.inventoryItem.update({ where: { id: item.id }, data: { quantity: newQty, cost: Math.round(newCost * 100) / 100 } });
+        await tx.stockMovement.create({ data: { itemId: item.id, change: i.quantity, reason: `採購入庫 ${po.number}`, refId: po.id } });
+      }
+      const bill = async (lines: typeof po.items, accountId: string, label: string) => {
+        if (!lines.length) return;
+        const t = totals(lines, po.taxRate);
+        const e = await tx.expense.create({
+          data: {
+            date: new Date(), vendorId: po.vendorId, projectId: po.projectId, accountId,
+            description: `${po.number} ${label}`, amount: t.subtotal, tax: t.tax, status: "UNPAID",
+            dueDate: new Date(Date.now() + 30 * 864e5), purchaseOrderId: po.id,
+          },
+        });
+        await postExpense(tx, e.id);
+      };
+      await bill(stockLines, inv.id, "庫存採購");
+      await bill(otherLines, (cost ?? inv).id, "採購");
+      await tx.purchaseOrder.update({ where: { id }, data: { status: "RECEIVED" } });
+    });
+    await audit(u.id, "驗收到貨", "採購單", id);
+    revalidatePath(`/purchases/${id}`);
+    revalidatePath("/inventory");
+    revalidatePath("/expenses");
   });
-  await audit(u.id, "驗收到貨", "採購單", id);
-  revalidatePath(`/purchases/${id}`);
-  revalidatePath("/inventory");
-  revalidatePath("/expenses");
 }
 
 export async function deletePO(id: string) {
-  const u = await requireUser("purchasing");
-  const po = await db.purchaseOrder.findUniqueOrThrow({ where: { id } });
-  if (po.status === "RECEIVED") throw new Error("已到貨的採購單無法刪除");
-  await db.purchaseOrder.delete({ where: { id } });
-  await audit(u.id, "刪除", "採購單", id, po.number);
-  redirect("/purchases");
+  return guard(async () => {
+    const u = await requireUser("purchasing");
+    const po = await db.purchaseOrder.findUniqueOrThrow({ where: { id } });
+    if (po.status === "RECEIVED") throw new Error("已到貨的採購單無法刪除");
+    await db.purchaseOrder.delete({ where: { id } });
+    await audit(u.id, "刪除", "採購單", id, po.number);
+    redirect("/purchases");
+  });
 }
 
 // ── 庫存 ──

@@ -42,10 +42,15 @@ const TONE: Record<string, string> = {
   amber: "bg-accent-soft text-accent ring-accent/20",
   red: "bg-danger-soft text-danger ring-danger/20",
 };
-export function Badge({ status, label, tone }: { status?: string; label?: string; tone?: string }) {
+const DOT: Record<string, string> = { gray: "bg-ink-subtle", blue: "bg-primary", green: "bg-success", amber: "bg-accent", red: "bg-danger" };
+
+/** 狀態標籤（Notion 風格：色點 + 文字）。dot={false} 可關閉色點 */
+export function Badge({ status, label, tone, dot = true }: { status?: string; label?: string; tone?: string; dot?: boolean }) {
   const s = status ? STATUS[status] : undefined;
+  const t = tone ?? s?.tone ?? "gray";
   return (
-    <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${TONE[tone ?? s?.tone ?? "gray"]}`}>
+    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${TONE[t]}`}>
+      {dot && <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT[t]}`} aria-hidden />}
       {label ?? s?.label ?? status}
     </span>
   );

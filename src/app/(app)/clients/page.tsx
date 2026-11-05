@@ -6,13 +6,17 @@ import { clientStats } from "@/lib/client-stats";
 import { IMPORT_CLIENT } from "@/lib/client-match";
 import { PageHeader, Card, Empty, Stat, Chip } from "@/components/ui";
 import { ClientCsvForm } from "./csv";
+import { FilterBar } from "@/components/filters";
+import { href, pick } from "@/lib/filters";
 
-export default async function Clients({ searchParams }: { searchParams: Promise<{ q?: string; sort?: string }> }) {
+export default async function Clients({ searchParams }: { searchParams: Promise<{ q?: string; sort?: string; has?: string; info?: string }> }) {
   await requireUser("sales");
-  const { q, sort = "revenue" } = await searchParams;
+  const sp = await searchParams;
+  const { q, sort = "revenue" } = sp;
+  const f = pick(sp, ["q", "has", "info"]);
   const [clients, stats, unassigned] = await Promise.all([
     db.client.findMany({
-      where: q ? { OR: [{ name: { contains: q } }, { contact: { contains: q } }, { taxId: { contains: q } }, { aliases: { contains: q } }] } : undefined,
+      where: q ? { OR: [{ name: { contains: q } }, { contact: { contains: q } }, { taxId: { contains: q } }, { aliases: { contains: q } }, { email: { contains: q } }, { phone: { contains: q } }] } : undefined,
       include: { _count: { select: { quotes: true, invoices: true } } },
     }),
     clientStats(),
@@ -21,11 +25,13 @@ export default async function Clients({ searchParams }: { searchParams: Promise<
   const rows = clients
     .map((c) => ({ c, s: stats.get(c.id) ?? { projects: 0, revenue: 0, outstanding: 0, last: null } }))
     .filter(({ c, s }) => c.name !== IMPORT_CLIENT || s.outstanding > 0 || c._count.invoices > 0)
+    .filter(({ s }) => (f.has === "outstanding" ? s.outstanding > 0 : f.has === "active" ? s.projects > 0 : f.has === "none" ? s.projects === 0 : true))
+    .filter(({ c }) => (f.info === "missing" ? !c.taxId || !c.contact || !(c.phone || c.email) : f.info === "new" ? (c.notes ?? "").includes("新客戶") : true))
     .sort((a, b) => (sort === "name" ? a.c.name.localeCompare(b.c.name, "zh-TW") : sort === "recent" ? (b.s.last?.getTime() ?? 0) - (a.s.last?.getTime() ?? 0) : b.s.revenue - a.s.revenue));
   const total = rows.reduce((t, r) => t + r.s.revenue, 0);
   const outstanding = rows.reduce((t, r) => t + r.s.outstanding, 0);
   const sortLink = (k: string, label: string) => (
-    <Chip href={`/clients?sort=${k}${q ? `&q=${encodeURIComponent(q)}` : ""}`} active={sort === k}>{label}</Chip>
+    <Chip href={href("/clients", f, { sort: k })} active={sort === k}>{label}</Chip>
   );
   return (
     <>
@@ -38,8 +44,12 @@ export default async function Clients({ searchParams }: { searchParams: Promise<
       </div>
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {sortLink("revenue", "依營收")}{sortLink("recent", "依最近專案")}{sortLink("name", "依名稱")}
-        <form className="w-full sm:ml-auto sm:w-auto"><input type="hidden" name="sort" value={sort} /><input type="search" aria-label="搜尋名稱、別名、統編" name="q" defaultValue={q} placeholder="搜尋名稱、別名、統編…" className="input w-full sm:w-56" /></form>
       </div>
+      <FilterBar path="/clients" values={f} keep={{ sort }} fields={[
+        { type: "search", name: "q", label: "搜尋", placeholder: "名稱、別名、統編、聯絡人…" },
+        { type: "select", name: "has", label: "往來", options: [{ value: "outstanding", label: "有未收款" }, { value: "active", label: "有專案" }, { value: "none", label: "尚無專案" }] },
+        { type: "select", name: "info", label: "資料", options: [{ value: "missing", label: "缺統編或聯絡資料" }, { value: "new", label: "報價單匯入的新客戶" }] },
+      ]} />
       <Card pad={false} className="mb-6">
         {rows.length === 0 ? <Empty>尚無客戶，可用下方「匯入 CSV」批次建立</Empty> : (
           <table className="tbl">

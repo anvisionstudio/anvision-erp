@@ -6,16 +6,24 @@ import { saveExpense, payExpense, deleteExpense } from "@/app/actions/finance";
 import { resolveAccount, ACC } from "@/lib/ledger";
 import { PageHeader, Card, Badge, Empty, Tabs, Field, Select, Stat, statusOptions } from "@/components/ui";
 import { ConfirmButton, SubmitButton } from "@/components/client";
+import { FilterBar } from "@/components/filters";
+import { dateRange, href, pick } from "@/lib/filters";
 
-export default async function Expenses({ searchParams }: { searchParams: Promise<{ status?: string; new?: string; edit?: string; projectId?: string; month?: string }> }) {
+export default async function Expenses({ searchParams }: { searchParams: Promise<{ status?: string; new?: string; edit?: string; projectId?: string; month?: string; q?: string; vendor?: string; project?: string; account?: string; from?: string; to?: string }> }) {
   await requireUser("finance");
   const sp = await searchParams;
   const status = sp.status ?? "UNPAID";
+  const f = pick(sp, ["q", "vendor", "project", "account", "month", "from", "to"]);
   const mStart = sp.month ? new Date(sp.month + "-01") : null;
   const mEnd = mStart ? new Date(mStart.getFullYear(), mStart.getMonth() + 1, 1) : null;
   const [expenses, vendors, projects, accounts, editing] = await Promise.all([
     db.expense.findMany({
-      where: { ...(status === "ALL" ? {} : { status }), ...(mStart && mEnd ? { date: { gte: mStart, lt: mEnd } } : {}) },
+      where: {
+        ...(status === "ALL" ? {} : { status }), ...(mStart && mEnd ? { date: { gte: mStart, lt: mEnd } } : {}),
+        ...(f.vendor ? { vendorId: f.vendor } : {}), ...(f.project ? { projectId: f.project } : {}), ...(f.account ? { accountId: f.account } : {}),
+        ...(dateRange(f.from, f.to) ? { date: dateRange(f.from, f.to) } : {}),
+        ...(f.q ? { OR: [{ description: { contains: f.q } }, { vendor: { name: { contains: f.q } } }, { project: { name: { contains: f.q } } }] } : {}),
+      },
       include: { vendor: true, project: true, account: true }, orderBy: { date: "desc" },
     }),
     db.vendor.findMany({ orderBy: { name: "asc" } }),
@@ -51,9 +59,17 @@ export default async function Expenses({ searchParams }: { searchParams: Promise
       )}
       <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4"><Stat label="列表中未付金額（含稅）" value={twd(unpaid)} /></div>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Tabs active={status} tabs={[["UNPAID", "未付款"], ["PAID", "已付款"], ["ALL", "全部"]].map(([k, l]) => ({ key: k, label: l, href: `/expenses?status=${k}${sp.month ? "&month=" + sp.month : ""}` }))} />
-        <form className="mb-4 flex gap-2"><input type="hidden" name="status" value={status} /><input type="month" aria-label="月份" name="month" defaultValue={sp.month} className="input" /><button className="btn-secondary">篩選</button></form>
+        <Tabs active={status} tabs={[["UNPAID", "未付款"], ["PAID", "已付款"], ["ALL", "全部"]].map(([k, l]) => ({ key: k, label: l, href: href("/expenses", f, { status: k }) }))} />
       </div>
+      <FilterBar path="/expenses" values={f} keep={{ status }} fields={[
+        { type: "search", name: "q", label: "搜尋", placeholder: "說明、供應商、專案…" },
+        { type: "select", name: "vendor", label: "供應商", options: vendors.map((v) => ({ value: v.id, label: v.name })) },
+        { type: "select", name: "project", label: "專案", options: projects.map((p) => ({ value: p.id, label: p.name })) },
+        { type: "select", name: "account", label: "科目", options: accounts.map((a) => ({ value: a.id, label: `${a.code} ${a.name}` })) },
+        { type: "month", name: "month", label: "月份" },
+        { type: "date", name: "from", label: "日期（起）" },
+        { type: "date", name: "to", label: "日期（迄）" },
+      ]} />
       <Card pad={false}>
         {expenses.length === 0 ? <Empty /> : (
           <table className="tbl">

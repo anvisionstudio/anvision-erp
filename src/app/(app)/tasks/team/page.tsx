@@ -6,9 +6,10 @@ import { canManageProject, PRIORITY, PRIORITY_OPTIONS } from "@/lib/perm";
 import { saveTask } from "@/app/actions/projects";
 import { PageHeader, Card, Badge, Empty, Field, Select, Tabs, Chip } from "@/components/ui";
 import { SubmitButton } from "@/components/client";
+import { FilterBar } from "@/components/filters";
 
 
-export default async function TeamTasks({ searchParams }: { searchParams: Promise<{ user?: string; show?: string }> }) {
+export default async function TeamTasks({ searchParams }: { searchParams: Promise<{ user?: string; show?: string; project?: string; priority?: string; status?: string; q?: string }> }) {
   const me = await requireUser("projects");
   const sp = await searchParams;
   const now = new Date();
@@ -39,12 +40,15 @@ export default async function TeamTasks({ searchParams }: { searchParams: Promis
   const maxTotal = Math.max(1, ...rows.map((r) => r.total));
 
   const sel = sp.user;
+  const f = { project: sp.project, priority: sp.priority, status: sp.status, q: sp.q };
+  const taskProjects = [...new Map(tasks.map((t) => [t.project.id, t.project.name])).entries()].sort((a, b) => a[1].localeCompare(b[1], "zh-TW"));
   const list = tasks
+    .filter((t) => (!f.project || t.project.id === f.project) && (!f.priority || t.priority === f.priority) && (!f.status || t.status === f.status) && (!f.q || [t.title, t.project.name].some((x) => x.includes(f.q!))))
     .filter((t) => (!sel ? true : sel === "none" ? !t.assigneeId : t.assigneeId === sel))
     .filter((t) => (sp.show === "overdue" ? isOverdue(t) : sp.show === "soon" ? t.dueDate && t.dueDate >= now && t.dueDate <= soon : true))
     .sort((a, b) => (isOverdue(b) ? 1 : 0) - (isOverdue(a) ? 1 : 0) || (PRIORITY[a.priority]?.order ?? 3) - (PRIORITY[b.priority]?.order ?? 3) || (a.dueDate?.getTime() ?? 9e15) - (b.dueDate?.getTime() ?? 9e15));
   const q = (patch: Record<string, string | undefined>) => {
-    const p = new URLSearchParams(Object.entries({ user: sp.user, show: sp.show, ...patch }).filter(([, v]) => v) as [string, string][]);
+    const p = new URLSearchParams(Object.entries({ user: sp.user, show: sp.show, ...f, ...patch }).filter(([, v]) => v) as [string, string][]);
     return `/tasks/team${p.size ? `?${p}` : ""}`;
   };
 
@@ -53,6 +57,12 @@ export default async function TeamTasks({ searchParams }: { searchParams: Promis
       <PageHeader title="團隊任務" sub={`${tasks.length} 項未完成任務・${rows.reduce((s, r) => s + r.overdue, 0)} 項逾期`} />
       <Tabs active="team" tabs={[{ key: "mine", label: "我的任務", href: "/tasks" }, { key: "team", label: "團隊總覽", href: "/tasks/team" }, { key: "timeline", label: "時間軸", href: "/timeline" }]} />
 
+      <FilterBar path="/tasks/team" values={f} keep={{ user: sp.user, show: sp.show }} fields={[
+        { type: "search", name: "q", label: "搜尋", placeholder: "任務、專案…" },
+        { type: "select", name: "project", label: "專案", options: taskProjects.map(([value, label]) => ({ value, label })) },
+        { type: "select", name: "status", label: "狀態", options: [{ value: "TODO", label: "待辦" }, { value: "DOING", label: "進行中" }, { value: "REVIEW", label: "審核中" }] },
+        { type: "select", name: "priority", label: "優先度", options: PRIORITY_OPTIONS },
+      ]} />
       <Card title="成員工作量" pad={false} className="mb-6">
         <table className="tbl">
           <thead><tr><th>成員</th><th className="text-right">未完成</th><th>分布</th><th className="text-right">逾期</th><th className="text-right">7 天內到期</th><th className="text-right">預估工時</th><th className="text-right">本週已登錄</th></tr></thead>
@@ -100,7 +110,7 @@ export default async function TeamTasks({ searchParams }: { searchParams: Promis
         </Card>
 
         {manageable.length > 0 && (
-          <Card title="指派任務">
+          <div id="assign" className="scroll-mt-20"><Card title="指派任務">
             <form action={saveTask} className="space-y-3">
               <input type="hidden" name="open" value="1" />
               <Field label="專案 *"><Select name="projectId" required placeholder="選擇專案" options={manageable.map((p) => ({ value: p.id, label: p.name }))} /></Field>
@@ -117,7 +127,7 @@ export default async function TeamTasks({ searchParams }: { searchParams: Promis
               <Field label="說明"><textarea name="description" rows={3} className="input" /></Field>
               <SubmitButton>建立並指派</SubmitButton>
             </form>
-          </Card>
+          </Card></div>
         )}
       </div>
     </>

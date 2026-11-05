@@ -47,4 +47,6 @@ export const STATUS: Record<string, { label: string; tone: string }> = {
   PENDING: { label: "待審核", tone: "amber" },
   APPROVED: { label: "已核准", tone: "green" },
   LEFT: { label: "已離職", tone: "gray" },
+  ENABLED: { label: "使用中", tone: "green" },
+  DISABLED: { label: "已停用", tone: "gray" },
 };

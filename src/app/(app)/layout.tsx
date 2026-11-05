@@ -19,6 +19,7 @@ const NAV: { title: string; items: { href: string; label: string; icon: string; 
       { href: "/timeline", label: "時間軸", icon: "timeline", area: "projects" },
       { href: "/tasks", label: "我的任務", icon: "tasks", area: "projects" },
       { href: "/tasks/team", label: "團隊任務", icon: "team", area: "projects" },
+      { href: "/meetings", label: "會議記錄", icon: "meetings", area: "projects" },
       { href: "/time", label: "工時紀錄", icon: "time", area: "time" },
     ],
   },
@@ -73,7 +74,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             示範模式：資料不會永久保存，且可能在不同頁面間不一致。正式使用請在 Vercel 連接資料庫（Storage → Neon）。
           </div>
         )}
-        <div className="mx-auto max-w-7xl px-4 py-5 md:px-6 md:py-8">{children}</div>
+        <div className="w-full px-4 py-5 md:px-6 md:py-8 2xl:px-10">{children}</div>
       </main>
     </div>
   );

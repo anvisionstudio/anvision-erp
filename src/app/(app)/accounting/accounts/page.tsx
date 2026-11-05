@@ -25,17 +25,18 @@ export default async function Accounts() {
       {types.map((t) => (
         <Card key={t.value} title={t.label} pad={false} className="mb-4">
           <table className="tbl">
-            <thead><tr><th className="w-24">代碼</th><th>名稱</th><th className="text-right">借方累計</th><th className="text-right">貸方累計</th><th className="text-right">餘額</th><th /></tr></thead>
+            <thead><tr><th className="w-24">代碼</th><th>名稱</th><th className="text-right">借方累計</th><th className="text-right">貸方累計</th><th className="text-right">餘額</th><th>狀態</th><th><span className="sr-only">操作</span></th></tr></thead>
             <tbody>{rows.filter((r) => r.type === t.value).map((a) => (
               <tr key={a.id} className={a.active ? "" : "bg-surface-muted text-ink-muted"}>
                 <td className="font-mono">{a.code}</td>
-                <td><Link className="link" href={`/accounting?account=${a.id}`}>{a.name}</Link>{!a.active && <Badge label="停用" />}</td>
+                <td><Link className="link" href={`/accounting?account=${a.id}`}>{a.name}</Link></td>
                 <td className="num">{num(a.debit)}</td><td className="num">{num(a.credit)}</td><td className="num font-medium">{num(a.balance)}</td>
+                <td><Badge status={a.active ? "ENABLED" : "DISABLED"} /></td>
                 <td className="text-right">
                   <form action={saveAccount}>
                     <input type="hidden" name="id" value={a.id} /><input type="hidden" name="code" value={a.code} /><input type="hidden" name="name" value={a.name} /><input type="hidden" name="type" value={a.type} />
                     <input type="hidden" name="active" value={a.active ? "false" : "true"} />
-                    <button className="btn-secondary btn-sm">{a.active ? "停用" : "啟用"}</button>
+                    <button className={`${a.active ? "btn-danger" : "btn-success"} btn-sm min-w-[4rem]`} aria-label={`${a.active ? "停用" : "啟用"}科目 ${a.code} ${a.name}`}>{a.active ? "停用" : "啟用"}</button>
                   </form>
                 </td>
               </tr>

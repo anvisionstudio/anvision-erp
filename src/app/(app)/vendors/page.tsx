@@ -3,11 +3,12 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { twd, date } from "@/lib/format";
 import { vendorLedger } from "@/lib/vendor-ledger";
-import { PageHeader, Card, Empty, Badge, Stat, Chip } from "@/components/ui";
+import { PageHeader, Card, Empty, Badge, Stat } from "@/components/ui";
 import { VendorForm } from "./form";
 import { VendorCsvForm } from "./csv";
+import { FilterBar } from "@/components/filters";
 
-export default async function Vendors({ searchParams }: { searchParams: Promise<{ new?: string; cat?: string; q?: string }> }) {
+export default async function Vendors({ searchParams }: { searchParams: Promise<{ new?: string; cat?: string; q?: string; pay?: string }> }) {
   await requireUser("purchasing");
   const sp = await searchParams;
   const [all, { stats }] = await Promise.all([db.vendor.findMany({ include: { expenses: true }, orderBy: { name: "asc" } }), vendorLedger()]);
@@ -16,6 +17,7 @@ export default async function Vendors({ searchParams }: { searchParams: Promise<
     .filter((v) => !sp.cat || v.category === sp.cat)
     .filter((v) => !sp.q || [v.name, v.aliases, v.contact, v.taxId].some((x) => x?.includes(sp.q!)))
     .map((v) => ({ v, s: stats.get(v.id)!, unpaid: v.expenses.filter((e) => e.status === "UNPAID").reduce((t, e) => t + e.amount + e.tax, 0), erp: v.expenses.reduce((t, e) => t + e.amount, 0) }))
+    .filter((x) => (sp.pay === "unpaid" ? x.unpaid > 0 : sp.pay === "prepaid" ? x.s.prepaid > 0 : true))
     .sort((a, b) => b.s.spend + b.erp - (a.s.spend + a.erp));
   const total = vendors.reduce((t, x) => t + x.s.spend + x.erp, 0);
   const prepaid = vendors.reduce((t, x) => t + x.s.prepaid, 0);
@@ -28,13 +30,11 @@ export default async function Vendors({ searchParams }: { searchParams: Promise<
         <Stat label="帳上成本 / 費用合計" value={twd(total)} hint="依日記簿摘要別名比對" />
         <Stat label="預付儲值餘額" value={twd(prepaid)} />
       </div>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Chip href="/vendors" active={!sp.cat}>全部</Chip>
-        {categories.map((c) => (
-          <Chip key={c} href={`/vendors?cat=${encodeURIComponent(c)}`} active={sp.cat === c}>{c}</Chip>
-        ))}
-        <form className="w-full sm:ml-auto sm:w-auto"><input type="search" aria-label="搜尋供應商" name="q" defaultValue={sp.q} placeholder="搜尋供應商…" className="input w-full sm:w-48" /></form>
-      </div>
+      <FilterBar path="/vendors" values={{ q: sp.q, cat: sp.cat, pay: sp.pay }} fields={[
+        { type: "search", name: "q", label: "搜尋", placeholder: "名稱、別名、聯絡人、統編…" },
+        { type: "select", name: "cat", label: "類別", options: categories.map((c) => ({ value: c, label: c })) },
+        { type: "select", name: "pay", label: "帳款", options: [{ value: "unpaid", label: "有未付款" }, { value: "prepaid", label: "有預付餘額" }] },
+      ]} />
       <Card pad={false} className="mb-6">
         {vendors.length === 0 ? <Empty>尚無供應商，可用下方「匯入 CSV」批次建立</Empty> : (
           <table className="tbl">

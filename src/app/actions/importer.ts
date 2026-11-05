@@ -1,4 +1,5 @@
 "use server";
+import { guard as safe } from "@/lib/guard";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { db, isDemo } from "@/lib/db";
@@ -47,14 +48,18 @@ export async function importDrive(_: ImportState, f: FormData): Promise<ImportSt
 }
 
 export async function setAutopost(on: boolean) {
-  const u = await requireUser("finance");
-  await db.setting.upsert({ where: { key: "ledger.autopost" }, create: { key: "ledger.autopost", value: String(on) }, update: { value: String(on) } });
-  await audit(u.id, on ? "開啟自動過帳" : "關閉自動過帳", "帳務設定");
-  revalidatePath("/settings/import");
+  return safe(async () => {
+    const u = await requireUser("finance");
+    await db.setting.upsert({ where: { key: "ledger.autopost" }, create: { key: "ledger.autopost", value: String(on) }, update: { value: String(on) } });
+    await audit(u.id, on ? "開啟自動過帳" : "關閉自動過帳", "帳務設定");
+    revalidatePath("/settings/import");
+  });
 }
 
 export async function clearDriveLink() {
-  await requireUser("finance");
-  await db.setting.deleteMany({ where: { key: "sync.drive" } });
-  revalidatePath("/settings/import");
+  return safe(async () => {
+    await requireUser("finance");
+    await db.setting.deleteMany({ where: { key: "sync.drive" } });
+    revalidatePath("/settings/import");
+  });
 }

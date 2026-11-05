@@ -85,7 +85,7 @@ export default async function Settings() {
           </div>
           <ul className="divide-y divide-line">
             {users.map((u) => (
-              <li key={u.id}>
+              <li key={u.id} className={u.active ? "" : "bg-surface-muted"}>
                 <form action={saveUser} className="grid grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-2 xl:grid-cols-[1fr_1.4fr_1fr_0.8fr_1fr_auto_auto] xl:items-center xl:gap-2 xl:py-2.5">
                   <input type="hidden" name="id" value={u.id} />
                   <Field label="姓名" className="[&>.label]:xl:sr-only"><input name="name" defaultValue={u.name} className="input" autoComplete="off" /></Field>
@@ -93,7 +93,7 @@ export default async function Settings() {
                   <Field label="角色" className="[&>.label]:xl:sr-only"><Select name="role" defaultValue={u.role} options={roles} /></Field>
                   <Field label="狀態" className="[&>.label]:xl:sr-only"><Select name="active" defaultValue={u.active ? "true" : "false"} options={[{ value: "true", label: "啟用" }, { value: "false", label: "停用" }]} /></Field>
                   <Field label="重設密碼" className="[&>.label]:xl:sr-only"><input name="password" type="password" placeholder="留空不變更" className="input" autoComplete="new-password" minLength={8} /></Field>
-                  <span className="text-xs text-ink-muted">建立於 {date(u.createdAt)} {u.id === me.id && <Badge label="我" tone="blue" />}</span>
+                  <span className="flex flex-wrap items-center gap-1.5 text-xs text-ink-muted"><Badge status={u.active ? "ENABLED" : "DISABLED"} />建立於 {date(u.createdAt)} {u.id === me.id && <Badge label="我" tone="blue" dot={false} />}</span>
                   <div className="sm:text-right"><button className="btn-secondary btn-sm w-full sm:w-auto">儲存</button></div>
                 </form>
               </li>

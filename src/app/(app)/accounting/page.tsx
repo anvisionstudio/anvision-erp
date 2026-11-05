@@ -6,6 +6,7 @@ import { date, num } from "@/lib/format";
 import { deleteJournal } from "@/app/actions/finance";
 import { PageHeader, Card, Badge, Empty } from "@/components/ui";
 import { ConfirmButton } from "@/components/client";
+import { FilterBar } from "@/components/filters";
 
 const SRC: Record<string, string> = { IMPORT: "Excel", MANUAL: "手動", INVOICE: "請款", PAYMENT: "收款", EXPENSE: "費用", EXPENSE_PAY: "付款", PAYROLL: "薪資", INVENTORY: "庫存" };
 
@@ -26,13 +27,12 @@ export default async function Journal({ searchParams }: { searchParams: Promise<
   return (
     <>
       <PageHeader title="傳票 / 總帳" sub="Excel 日記簿同步的傳票、ERP 自動產生的傳票與手動傳票" actions={<Link href="/accounting/new" className="btn-primary">＋ 手動傳票</Link>} />
-      <form className="mb-4 flex flex-wrap gap-2">
-        <input type="search" aria-label="傳票號 / 摘要 / 專案" name="q" defaultValue={sp.q} placeholder="傳票號 / 摘要 / 專案" className="input w-full sm:w-56" />
-        <input type="date" aria-label="起始日期" name="from" defaultValue={sp.from} className="input w-full sm:w-40" />
-        <input type="date" aria-label="結束日期" name="to" defaultValue={sp.to} className="input w-full sm:w-40" />
-        <select aria-label="會計科目" name="account" defaultValue={sp.account ?? ""} className="input w-full sm:w-56"><option value="">所有科目</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}</select>
-        <button className="btn-secondary">查詢</button>
-      </form>
+      <FilterBar path="/accounting" values={{ q: sp.q, from: sp.from, to: sp.to, account: sp.account }} fields={[
+        { type: "search", name: "q", label: "搜尋", placeholder: "傳票號 / 摘要 / 專案" },
+        { type: "select", name: "account", label: "會計科目", all: "所有科目", options: accounts.map((a) => ({ value: a.id, label: `${a.code} ${a.name}` })) },
+        { type: "date", name: "from", label: "日期（起）" },
+        { type: "date", name: "to", label: "日期（迄）" },
+      ]} />
       <Card pad={false}>
         {entries.length === 0 ? <Empty /> : (
           <table className="tbl">

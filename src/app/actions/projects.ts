@@ -1,4 +1,5 @@
 "use server";
+import { guard } from "@/lib/guard";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
@@ -26,14 +27,16 @@ export async function saveProject(f: FormData) {
 }
 
 export async function deleteProject(id: string) {
-  const u = await requireUser("projects");
-  if (!(u.role === "ADMIN" || u.role === "MANAGER")) throw new Error("只有管理員或專案經理可以刪除專案");
-  const c = await db.project.findUniqueOrThrow({ where: { id }, include: { _count: { select: { invoices: true, expenses: true } } } });
-  if (c._count.invoices + c._count.expenses > 0) throw new Error("此專案已有請款或費用，請改為「已取消」狀態");
-  await db.quote.updateMany({ where: { projectId: id }, data: { projectId: null } });
-  await db.project.delete({ where: { id } });
-  await audit(u.id, "刪除", "專案", id, c.name);
-  redirect("/projects");
+  return guard(async () => {
+    const u = await requireUser("projects");
+    if (!(u.role === "ADMIN" || u.role === "MANAGER")) throw new Error("只有管理員或專案經理可以刪除專案");
+    const c = await db.project.findUniqueOrThrow({ where: { id }, include: { _count: { select: { invoices: true, expenses: true } } } });
+    if (c._count.invoices + c._count.expenses > 0) throw new Error("此專案已有請款或費用，請改為「已取消」狀態");
+    await db.quote.updateMany({ where: { projectId: id }, data: { projectId: null } });
+    await db.project.delete({ where: { id } });
+    await audit(u.id, "刪除", "專案", id, c.name);
+    redirect("/projects");
+  });
 }
 
 // ── 任務 ──
@@ -123,16 +126,18 @@ export async function saveTask(f: FormData) {
 }
 
 export async function setTaskStatus(id: string, status: string) {
-  const u = await requireUser("projects");
-  const cur = await db.task.findUniqueOrThrow({ where: { id }, include: { project: { select: { managerId: true } } } });
-  if (!canUpdateTask(u, cur, cur.project)) throw new Error("您不是此任務的負責人，無法變更狀態");
-  if (cur.status === status) return;
-  const manage = canManageProject(u, cur.project);
-  if (!manage && (status === "DONE" || cur.status === "DONE")) throw new Error("完成與重新開啟需由專案經理簽核");
-  const t = await db.task.update({ where: { id }, data: { status, completedAt: status === "DONE" ? new Date() : null } });
-  await logActivity(id, u.id, `狀態：${STATUS_LABEL[cur.status] ?? cur.status} → ${STATUS_LABEL[status] ?? status}`);
-  await recordSign(id, u, cur.status, status, cur.assigneeId === u.id);
-  revalidateTask(t);
+  return guard(async () => {
+    const u = await requireUser("projects");
+    const cur = await db.task.findUniqueOrThrow({ where: { id }, include: { project: { select: { managerId: true } } } });
+    if (!canUpdateTask(u, cur, cur.project)) throw new Error("您不是此任務的負責人，無法變更狀態");
+    if (cur.status === status) return;
+    const manage = canManageProject(u, cur.project);
+    if (!manage && (status === "DONE" || cur.status === "DONE")) throw new Error("完成與重新開啟需由專案經理簽核");
+    const t = await db.task.update({ where: { id }, data: { status, completedAt: status === "DONE" ? new Date() : null } });
+    await logActivity(id, u.id, `狀態：${STATUS_LABEL[cur.status] ?? cur.status} → ${STATUS_LABEL[status] ?? status}`);
+    await recordSign(id, u, cur.status, status, cur.assigneeId === u.id);
+    revalidateTask(t);
+  });
 }
 
 /** 時間軸拖曳：更新任務起訖日 */
@@ -218,21 +223,25 @@ export async function addTaskComment(f: FormData) {
 }
 
 export async function deleteTaskComment(id: string) {
-  const u = await requireUser("projects");
-  const c = await db.taskComment.findUniqueOrThrow({ where: { id }, include: { task: { select: { id: true, projectId: true } } } });
-  if (c.kind !== "COMMENT" || (c.userId !== u.id && u.role !== "ADMIN")) throw new Error("只能刪除自己的留言");
-  await db.taskComment.delete({ where: { id } });
-  revalidateTask(c.task);
+  return guard(async () => {
+    const u = await requireUser("projects");
+    const c = await db.taskComment.findUniqueOrThrow({ where: { id }, include: { task: { select: { id: true, projectId: true } } } });
+    if (c.kind !== "COMMENT" || (c.userId !== u.id && u.role !== "ADMIN")) throw new Error("只能刪除自己的留言");
+    await db.taskComment.delete({ where: { id } });
+    revalidateTask(c.task);
+  });
 }
 
 export async function deleteTask(id: string) {
-  const u = await requireUser("projects");
-  const cur = await db.task.findUniqueOrThrow({ where: { id }, include: { project: { select: { managerId: true } } } });
-  if (!canManageProject(u, cur.project)) throw new Error("只有專案經理或專案負責人可以刪除任務");
-  const t = await db.task.delete({ where: { id } });
-  await audit(u.id, "刪除", "任務", id, t.title);
-  revalidateTask(t);
-  redirect(t.parentId ? `/tasks/${t.parentId}` : `/projects/${t.projectId}`);
+  return guard(async () => {
+    const u = await requireUser("projects");
+    const cur = await db.task.findUniqueOrThrow({ where: { id }, include: { project: { select: { managerId: true } } } });
+    if (!canManageProject(u, cur.project)) throw new Error("只有專案經理或專案負責人可以刪除任務");
+    const t = await db.task.delete({ where: { id } });
+    await audit(u.id, "刪除", "任務", id, t.title);
+    revalidateTask(t);
+    redirect(t.parentId ? `/tasks/${t.parentId}` : `/projects/${t.projectId}`);
+  });
 }
 
 // ── 工時 ──
@@ -251,10 +260,22 @@ export async function saveTime(f: FormData) {
 }
 
 export async function deleteTime(id: string) {
-  const u = await requireUser("time");
-  const t = await db.timeEntry.findUniqueOrThrow({ where: { id } });
-  if (t.userId !== u.id && u.role === "STAFF") throw new Error("只能刪除自己的工時");
-  await db.timeEntry.delete({ where: { id } });
-  revalidatePath("/time");
-  revalidatePath(`/projects/${t.projectId}`);
+  return guard(async () => {
+    const u = await requireUser("time");
+    const t = await db.timeEntry.findUniqueOrThrow({ where: { id } });
+    if (t.userId !== u.id && u.role === "STAFF") throw new Error("只能刪除自己的工時");
+    await db.timeEntry.delete({ where: { id } });
+    revalidatePath("/time");
+    revalidatePath(`/projects/${t.projectId}`);
+  });
+}
+
+/** 儀表板勾選：專案經理直接完成；負責人則送審（需經理簽核） */
+export async function quickCheckTask(id: string) {
+  const u = await requireUser("projects");
+  const cur = await db.task.findUniqueOrThrow({ where: { id }, include: { project: { select: { managerId: true } } } });
+  const next = canManageProject(u, cur.project) ? "DONE" : "REVIEW";
+  if (cur.status === next) return;
+  await setTaskStatus(id, next);
+  revalidatePath("/");
 }

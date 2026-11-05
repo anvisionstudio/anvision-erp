@@ -3,10 +3,10 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { twd, date, totals } from "@/lib/format";
-import { deleteClient } from "@/app/actions/sales";
-import { PageHeader, Card, Badge, Empty, Stat } from "@/components/ui";
+import { deleteClient, mergeClient } from "@/app/actions/sales";
+import { PageHeader, Card, Badge, Empty, Stat, Field, Select } from "@/components/ui";
 import { clientStats } from "@/lib/client-stats";
-import { ConfirmButton } from "@/components/client";
+import { ConfirmButton, ConfirmSubmit } from "@/components/client";
 import { ClientForm } from "../form";
 
 export default async function ClientDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -22,13 +22,15 @@ export default async function ClientDetail({ params }: { params: Promise<{ id: s
   });
   if (!c) notFound();
   const del = deleteClient.bind(null, c.id);
+  const others = await db.client.findMany({ where: { id: { not: c.id } }, orderBy: { name: "asc" }, select: { id: true, name: true } });
+  const linked = c.projects.length + c.quotes.length + c.invoices.length;
   const st = (await clientStats()).get(c.id) ?? { projects: 0, revenue: 0, outstanding: 0, last: null };
   return (
     <>
       <PageHeader title={c.name} sub={c.taxId ? `統編 ${c.taxId}` : undefined} back="/clients"
         actions={<>
           <Link href={`/quotes/new?clientId=${c.id}`} className="btn-primary">＋ 建立報價</Link>
-          <ConfirmButton action={del} message="確定刪除此客戶？" className="btn-danger">刪除</ConfirmButton>
+          <ConfirmButton action={del} message={linked ? "此客戶有關聯紀錄，需先合併到其他客戶才能刪除。仍要嘗試刪除？" : "確定刪除此客戶？"} className="btn-danger">刪除</ConfirmButton>
         </>} />
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <Stat label="專案" value={st.projects} />
@@ -37,7 +39,17 @@ export default async function ClientDetail({ params }: { params: Promise<{ id: s
         <Stat label="最近專案" value={<span className="text-lg">{date(st.last)}</span>} />
       </div>
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card title="基本資料" className="lg:col-span-2"><ClientForm c={c} /></Card>
+        <div className="space-y-6 lg:col-span-2">
+          <Card title="基本資料"><ClientForm c={c} /></Card>
+          <Card title="合併到其他客戶">
+            <p className="mb-3 text-sm text-ink-muted">重複或改名的客戶可以合併：本客戶的 {c.projects.length} 個專案、{c.quotes.length} 張報價單、{c.invoices.length} 張請款單會移到目標客戶，名稱與別名加入目標的別名，目標空白的聯絡資料會用本客戶的資料補上，然後刪除本客戶。</p>
+            <form action={mergeClient} className="flex flex-wrap items-end gap-3">
+              <input type="hidden" name="sourceId" value={c.id} />
+              <Field label="合併到" className="min-w-[14rem] flex-1"><Select name="targetId" required placeholder="選擇客戶" options={others.map((o) => ({ value: o.id, label: o.name }))} /></Field>
+              <ConfirmSubmit message="確定合併？本客戶會被刪除，紀錄移到選擇的客戶。">合併並刪除本客戶</ConfirmSubmit>
+            </form>
+          </Card>
+        </div>
         <div className="space-y-6">
           <Card title="專案" pad={false}>
             {c.projects.length === 0 ? <Empty /> : <table className="tbl"><tbody>{c.projects.map((p) => (

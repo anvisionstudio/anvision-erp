@@ -4,14 +4,21 @@ import { date, isoDate, num } from "@/lib/format";
 import { requestLeave, reviewLeave, deleteLeave } from "@/app/actions/hr";
 import { PageHeader, Card, Empty, Field, Select, Badge } from "@/components/ui";
 import { ConfirmButton, SubmitButton } from "@/components/client";
+import { FilterBar } from "@/components/filters";
+import { dateRange, pick } from "@/lib/filters";
 
-export default async function Leave() {
+export default async function Leave({ searchParams }: { searchParams: Promise<{ status?: string; emp?: string; type?: string; from?: string; to?: string }> }) {
   const user = await requireUser("leave");
+  const f = pick(await searchParams, ["status", "emp", "type", "from", "to"]);
   const isHR = can(user, "hr");
   const reviewer = isHR || user.role === "MANAGER";
   const [leaves, emps] = await Promise.all([
-    db.leaveRequest.findMany({ where: reviewer ? {} : { employeeId: user.employee?.id ?? "-" }, include: { employee: true }, orderBy: { startDate: "desc" }, take: 100 }),
-    isHR ? db.employee.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" } }) : Promise.resolve([]),
+    db.leaveRequest.findMany({ where: {
+      ...(reviewer ? (f.emp ? { employeeId: f.emp } : {}) : { employeeId: user.employee?.id ?? "-" }),
+      ...(f.status ? { status: f.status } : {}), ...(f.type ? { type: f.type } : {}),
+      ...(dateRange(f.from, f.to) ? { startDate: dateRange(f.from, f.to) } : {}),
+    }, include: { employee: true }, orderBy: { startDate: "desc" }, take: 100 }),
+    reviewer ? db.employee.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" } }) : Promise.resolve([]),
   ]);
   const year = new Date().getFullYear();
   const myUsed = user.employee ? leaves.filter((l) => l.employeeId === user.employee!.id && l.type === "特休" && l.status === "APPROVED" && l.startDate.getFullYear() === year).reduce((s, l) => s + l.days, 0) : 0;
@@ -31,6 +38,13 @@ export default async function Leave() {
           </form>
         )}
       </Card>
+      <FilterBar path="/hr/leave" values={f} fields={[
+        { type: "select", name: "status", label: "狀態", options: [{ value: "PENDING", label: "待審核" }, { value: "APPROVED", label: "已核准" }, { value: "REJECTED", label: "未核准" }] },
+        ...(reviewer ? [{ type: "select" as const, name: "emp", label: "員工", options: emps.map((e) => ({ value: e.id, label: e.name })) }] : []),
+        { type: "select", name: "type", label: "假別", options: ["特休", "病假", "事假", "公假", "婚假", "喪假", "其他"].map((v) => ({ value: v, label: v })) },
+        { type: "date", name: "from", label: "開始日（起）" },
+        { type: "date", name: "to", label: "開始日（迄）" },
+      ]} />
       <Card title={reviewer ? "全部假單" : "我的假單"} pad={false}>
         {leaves.length === 0 ? <Empty /> : (
           <table className="tbl">

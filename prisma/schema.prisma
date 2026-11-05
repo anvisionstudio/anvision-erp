@@ -14,22 +14,23 @@ datasource db {
 // ───────────── 系統 / 權限 ─────────────
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  name         String
-  passwordHash String
-  role         String    @default("STAFF") // ADMIN | MANAGER | ACCOUNTANT | STAFF
-  active       Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  sessions     Session[]
-  employee     Employee?
-  tasks        Task[]
-  createdTasks Task[]    @relation("TaskCreator")
-  taskComments TaskComment[]
-  approvals    TaskApproval[]
-  timeEntries  TimeEntry[]
-  managedProjects Project[] @relation("ProjectManager")
-  auditLogs    AuditLog[]
+  id              String         @id @default(cuid())
+  email           String         @unique
+  name            String
+  passwordHash    String
+  role            String         @default("STAFF") // ADMIN | MANAGER | ACCOUNTANT | STAFF
+  active          Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  sessions        Session[]
+  employee        Employee?
+  tasks           Task[]
+  createdTasks    Task[]         @relation("TaskCreator")
+  taskComments    TaskComment[]
+  approvals       TaskApproval[]
+  timeEntries     TimeEntry[]
+  managedProjects Project[]      @relation("ProjectManager")
+  meetings        Meeting[]
+  auditLogs       AuditLog[]
 }
 
 model Session {
@@ -65,8 +66,8 @@ model Sequence {
 model Client {
   id        String    @id @default(cuid())
   name      String
-  aliases   String?   // 專案名稱中的別名，以逗號分隔（同步時自動把專案歸給此客戶）
-  taxId     String?   // 統一編號
+  aliases   String? // 專案名稱中的別名，以逗號分隔（同步時自動把專案歸給此客戶）
+  taxId     String? // 統一編號
   contact   String?
   email     String?
   phone     String?
@@ -97,76 +98,79 @@ model Quote {
 }
 
 model QuoteItem {
-  id          String @id @default(cuid())
+  id          String  @id @default(cuid())
   quoteId     String
-  quote       Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  quote       Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   description String
-  quantity    Float  @default(1)
-  unitPrice   Float  @default(0)
+  quantity    Float   @default(1)
+  unitPrice   Float   @default(0)
   unit        String? // 單位：篇、支、則、場、張…
   isGroup     Boolean @default(false) // 分類標題列（只有說明文字）
-  sort        Int    @default(0)
+  sort        Int     @default(0)
 }
 
 // ───────────── 專案管理 ─────────────
 
 model Project {
-  id          String      @id @default(cuid())
-  code        String      @unique
-  ref         String?     @unique // 對應 Excel「專案簡稱」與日記簿「專案」欄
-  name        String
-  clientId    String?
-  client      Client?     @relation(fields: [clientId], references: [id])
-  managerId   String?
-  manager     User?       @relation("ProjectManager", fields: [managerId], references: [id])
-  status      String      @default("ACTIVE") // PLANNING | ACTIVE | ON_HOLD | DONE | CANCELLED
-  budget      Float       @default(0)   // 合約金額（未稅）
-  startDate   DateTime?
-  dueDate     DateTime?
-  description String?
-  createdAt   DateTime    @default(now())
-  quote       Quote?
-  tasks       Task[]
-  timeEntries TimeEntry[]
-  invoices    Invoice[]
-  expenses    Expense[]
+  id             String          @id @default(cuid())
+  code           String          @unique
+  ref            String?         @unique // 對應 Excel「專案簡稱」與日記簿「專案」欄
+  name           String
+  clientId       String?
+  client         Client?         @relation(fields: [clientId], references: [id])
+  managerId      String?
+  manager        User?           @relation("ProjectManager", fields: [managerId], references: [id])
+  status         String          @default("ACTIVE") // PLANNING | ACTIVE | ON_HOLD | DONE | CANCELLED
+  budget         Float           @default(0) // 合約金額（未稅）
+  startDate      DateTime?
+  dueDate        DateTime?
+  description    String?
+  createdAt      DateTime        @default(now())
+  quote          Quote?
+  tasks          Task[]
+  timeEntries    TimeEntry[]
+  invoices       Invoice[]
+  expenses       Expense[]
   purchaseOrders PurchaseOrder[]
+  meetings       Meeting[]
 }
 
 model Task {
-  id         String    @id @default(cuid())
-  projectId  String
-  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parentId   String?   // 子項目：上層任務
-  parent     Task?     @relation("Subtasks", fields: [parentId], references: [id], onDelete: Cascade)
-  children   Task[]    @relation("Subtasks")
-  title      String
-  description String?
-  status     String    @default("TODO") // TODO | DOING | REVIEW | DONE
-  priority   String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
-  assigneeId String?
-  assignee   User?     @relation(fields: [assigneeId], references: [id])
-  createdById String?
-  createdBy  User?     @relation("TaskCreator", fields: [createdById], references: [id])
-  startDate  DateTime?
-  dueDate    DateTime?
-  estimateHours Float  @default(0)
-  completedAt DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @default(now()) @updatedAt
-  comments   TaskComment[]
-  approvals  TaskApproval[]
-  timeEntries TimeEntry[]
+  id            String         @id @default(cuid())
+  projectId     String
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentId      String? // 子項目：上層任務
+  parent        Task?          @relation("Subtasks", fields: [parentId], references: [id], onDelete: Cascade)
+  children      Task[]         @relation("Subtasks")
+  title         String
+  description   String?
+  status        String         @default("TODO") // TODO | DOING | REVIEW | DONE
+  priority      String         @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  assigneeId    String?
+  assignee      User?          @relation(fields: [assigneeId], references: [id])
+  createdById   String?
+  createdBy     User?          @relation("TaskCreator", fields: [createdById], references: [id])
+  startDate     DateTime?
+  dueDate       DateTime?
+  estimateHours Float          @default(0)
+  completedAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @default(now()) @updatedAt
+  comments      TaskComment[]
+  approvals     TaskApproval[]
+  timeEntries   TimeEntry[]
 }
 
-/** 簽核紀錄：每一次送審、核准、退回、撤回、重新開啟都留下誰、何時、前後狀態與意見 */
+/**
+ * 簽核紀錄：每一次送審、核准、退回、撤回、重新開啟都留下誰、何時、前後狀態與意見
+ */
 model TaskApproval {
   id         String   @id @default(cuid())
   taskId     String
   task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   userId     String
   user       User     @relation(fields: [userId], references: [id])
-  action     String   // SUBMIT | WITHDRAW | APPROVE | REJECT | REOPEN
+  action     String // SUBMIT | WITHDRAW | APPROVE | REJECT | REOPEN
   fromStatus String
   toStatus   String
   note       String?
@@ -175,7 +179,9 @@ model TaskApproval {
   @@index([taskId, createdAt])
 }
 
-/** 任務留言與活動紀錄（指派、狀態、日期變更） */
+/**
+ * 任務留言與活動紀錄（指派、狀態、日期變更）
+ */
 model TaskComment {
   id        String   @id @default(cuid())
   taskId    String
@@ -204,13 +210,13 @@ model TimeEntry {
 // ───────────── 會計 / 財務 ─────────────
 
 model Account {
-  id        String        @id @default(cuid())
-  code      String        @unique
-  name      String
-  type      String        // ASSET | LIABILITY | EQUITY | REVENUE | EXPENSE
-  active    Boolean       @default(true)
-  lines     JournalLine[]
-  expenses  Expense[]
+  id       String        @id @default(cuid())
+  code     String        @unique
+  name     String
+  type     String // ASSET | LIABILITY | EQUITY | REVENUE | EXPENSE
+  active   Boolean       @default(true)
+  lines    JournalLine[]
+  expenses Expense[]
 }
 
 model JournalEntry {
@@ -233,26 +239,26 @@ model JournalLine {
   debit     Float        @default(0)
   credit    Float        @default(0)
   memo      String?
-  project   String?      // 專案標籤（Excel 日記簿「專案」欄）
+  project   String? // 專案標籤（Excel 日記簿「專案」欄）
 }
 
 model Invoice {
-  id         String        @id @default(cuid())
-  number     String        @unique   // 內部請款單號
-  imported   Boolean       @default(false) // 由 Excel 匯入（不自動過帳）
-  gui        String?                 // 統一發票號碼
-  clientId   String
-  client     Client        @relation(fields: [clientId], references: [id])
-  projectId  String?
-  project    Project?      @relation(fields: [projectId], references: [id])
-  status     String        @default("DRAFT") // DRAFT | ISSUED | PARTIAL | PAID | VOID
-  issueDate  DateTime      @default(now())
-  dueDate    DateTime?
-  taxRate    Float         @default(0.05)
-  notes      String?
-  items      InvoiceItem[]
-  payments   Payment[]
-  createdAt  DateTime      @default(now())
+  id        String        @id @default(cuid())
+  number    String        @unique // 內部請款單號
+  imported  Boolean       @default(false) // 由 Excel 匯入（不自動過帳）
+  gui       String? // 統一發票號碼
+  clientId  String
+  client    Client        @relation(fields: [clientId], references: [id])
+  projectId String?
+  project   Project?      @relation(fields: [projectId], references: [id])
+  status    String        @default("DRAFT") // DRAFT | ISSUED | PARTIAL | PAID | VOID
+  issueDate DateTime      @default(now())
+  dueDate   DateTime?
+  taxRate   Float         @default(0.05)
+  notes     String?
+  items     InvoiceItem[]
+  payments  Payment[]
+  createdAt DateTime      @default(now())
 }
 
 model InvoiceItem {
@@ -280,57 +286,57 @@ model Payment {
 
 // 費用 / 應付帳款（供應商帳單）
 model Expense {
-  id          String    @id @default(cuid())
-  date        DateTime
-  vendorId    String?
-  vendor      Vendor?   @relation(fields: [vendorId], references: [id])
-  projectId   String?
-  project     Project?  @relation(fields: [projectId], references: [id])
-  accountId   String
-  account     Account   @relation(fields: [accountId], references: [id])
-  description String
-  amount      Float     // 未稅
-  tax         Float     @default(0) // 進項稅額
-  status      String    @default("UNPAID") // UNPAID | PAID
-  dueDate     DateTime?
-  paidDate    DateTime?
-  receiptNo   String?
+  id              String    @id @default(cuid())
+  date            DateTime
+  vendorId        String?
+  vendor          Vendor?   @relation(fields: [vendorId], references: [id])
+  projectId       String?
+  project         Project?  @relation(fields: [projectId], references: [id])
+  accountId       String
+  account         Account   @relation(fields: [accountId], references: [id])
+  description     String
+  amount          Float // 未稅
+  tax             Float     @default(0) // 進項稅額
+  status          String    @default("UNPAID") // UNPAID | PAID
+  dueDate         DateTime?
+  paidDate        DateTime?
+  receiptNo       String?
   purchaseOrderId String?
-  createdAt   DateTime  @default(now())
+  createdAt       DateTime  @default(now())
 }
 
 // ───────────── 採購 / 庫存 ─────────────
 
 model Vendor {
-  id        String          @id @default(cuid())
-  name      String
-  category  String?         // 印刷、大圖輸出、設計外包…
-  aliases   String?         // 日記簿摘要中的別名，以逗號分隔（用來計算帳上交易）
-  taxId     String?
-  contact   String?
-  email     String?
-  phone     String?
-  address   String?
-  bankInfo  String?
-  notes     String?
-  createdAt DateTime        @default(now())
-  expenses  Expense[]
+  id             String          @id @default(cuid())
+  name           String
+  category       String? // 印刷、大圖輸出、設計外包…
+  aliases        String? // 日記簿摘要中的別名，以逗號分隔（用來計算帳上交易）
+  taxId          String?
+  contact        String?
+  email          String?
+  phone          String?
+  address        String?
+  bankInfo       String?
+  notes          String?
+  createdAt      DateTime        @default(now())
+  expenses       Expense[]
   purchaseOrders PurchaseOrder[]
 }
 
 model PurchaseOrder {
-  id        String        @id @default(cuid())
-  number    String        @unique
+  id        String         @id @default(cuid())
+  number    String         @unique
   vendorId  String
-  vendor    Vendor        @relation(fields: [vendorId], references: [id])
+  vendor    Vendor         @relation(fields: [vendorId], references: [id])
   projectId String?
-  project   Project?      @relation(fields: [projectId], references: [id])
-  status    String        @default("DRAFT") // DRAFT | ORDERED | RECEIVED | CANCELLED
-  orderDate DateTime      @default(now())
-  taxRate   Float         @default(0.05)
+  project   Project?       @relation(fields: [projectId], references: [id])
+  status    String         @default("DRAFT") // DRAFT | ORDERED | RECEIVED | CANCELLED
+  orderDate DateTime       @default(now())
+  taxRate   Float          @default(0.05)
   notes     String?
   items     PurchaseItem[]
-  createdAt DateTime      @default(now())
+  createdAt DateTime       @default(now())
 }
 
 model PurchaseItem {
@@ -345,27 +351,27 @@ model PurchaseItem {
 }
 
 model InventoryItem {
-  id        String          @id @default(cuid())
-  sku       String          @unique
-  name      String
-  category  String?         // 耗材 / 器材 / 印刷品 ...
-  unit      String          @default("個")
-  cost      Float           @default(0)
-  quantity  Float           @default(0)
-  reorderLevel Float        @default(0)
-  location  String?
-  movements StockMovement[]
+  id            String          @id @default(cuid())
+  sku           String          @unique
+  name          String
+  category      String? // 耗材 / 器材 / 印刷品 ...
+  unit          String          @default("個")
+  cost          Float           @default(0)
+  quantity      Float           @default(0)
+  reorderLevel  Float           @default(0)
+  location      String?
+  movements     StockMovement[]
   purchaseItems PurchaseItem[]
 }
 
 model StockMovement {
-  id        String        @id @default(cuid())
-  itemId    String
-  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  date      DateTime      @default(now())
-  change    Float         // + 入庫 / - 出庫
-  reason    String        // 採購入庫 / 領用 / 盤點調整
-  refId     String?
+  id     String        @id @default(cuid())
+  itemId String
+  item   InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  date   DateTime      @default(now())
+  change Float // + 入庫 / - 出庫
+  reason String // 採購入庫 / 領用 / 盤點調整
+  refId  String?
 }
 
 // ───────────── 人事 ─────────────
@@ -392,7 +398,7 @@ model LeaveRequest {
   id         String   @id @default(cuid())
   employeeId String
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  type       String   // 特休 | 病假 | 事假 | 其他
+  type       String // 特休 | 病假 | 事假 | 其他
   startDate  DateTime
   endDate    DateTime
   days       Float
@@ -402,15 +408,44 @@ model LeaveRequest {
 }
 
 model Payroll {
-  id          String   @id @default(cuid())
-  employeeId  String
-  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  period      String   // 2026-11
-  baseSalary  Float
-  allowance   Float    @default(0)
-  deduction   Float    @default(0) // 勞健保自付、所得稅等
-  netPay      Float
-  status      String   @default("DRAFT") // DRAFT | PAID
-  paidDate    DateTime?
+  id         String    @id @default(cuid())
+  employeeId String
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  period     String // 2026-11
+  baseSalary Float
+  allowance  Float     @default(0)
+  deduction  Float     @default(0) // 勞健保自付、所得稅等
+  netPay     Float
+  status     String    @default("DRAFT") // DRAFT | PAID
+  paidDate   DateTime?
+
   @@unique([employeeId, period])
+}
+
+/// 會議記錄 / 筆記（可由 Notion 同步或 CSV 匯入）
+model Meeting {
+  id             String    @id @default(cuid())
+  kind           String    @default("MEETING") // MEETING 會議 | NOTE 筆記
+  title          String
+  date           DateTime
+  projectId      String?
+  project        Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  projectLabel   String? // 來源中的專案名稱（無法對應到系統專案時保留）
+  attendees      String?
+  tags           String?
+  summary        String?
+  decisions      String? // 決策
+  actions        String? // 未來行動項目
+  content        String? // 內文 / 筆記
+  source         String    @default("MANUAL") // MANUAL | NOTION | CSV
+  notionId       String?   @unique
+  notionUrl      String?
+  notionEditedAt DateTime?
+  createdById    String?
+  createdBy      User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([date])
+  @@index([projectId])
 }

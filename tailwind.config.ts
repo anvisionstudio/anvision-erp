@@ -37,7 +37,7 @@ export default {
         xl: ["1.5rem", { lineHeight: "2rem" }],
         "2xl": ["2rem", { lineHeight: "2.5rem" }],
       },
-      zIndex: { nav: "40", overlay: "30", sticky: "20" },
+      zIndex: { nav: "40", overlay: "30", sticky: "20", dropdown: "35" },
       minHeight: { touch: "2.75rem" },
     },
   },

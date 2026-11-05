@@ -1,4 +1,5 @@
 "use server";
+import { guard } from "@/lib/guard";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireUser, audit, hashPassword } from "@/lib/auth";
@@ -59,9 +60,11 @@ export async function saveCompanyImage(f: FormData) {
 }
 
 export async function removeCompanyImage(key: string) {
-  const u = await requireUser("admin");
-  if (!IMAGE_KEYS.some(([k]) => k === key)) throw new Error("不支援的圖片欄位");
-  await db.setting.deleteMany({ where: { key } });
-  await audit(u.id, "移除圖片", "公司設定", undefined, key);
-  revalidatePath("/settings");
+  return guard(async () => {
+    const u = await requireUser("admin");
+    if (!IMAGE_KEYS.some(([k]) => k === key)) throw new Error("不支援的圖片欄位");
+    await db.setting.deleteMany({ where: { key } });
+    await audit(u.id, "移除圖片", "公司設定", undefined, key);
+    revalidatePath("/settings");
+  });
 }

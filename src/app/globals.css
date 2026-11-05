@@ -62,6 +62,7 @@
   .btn-primary { @apply btn bg-primary text-primary-on hover:bg-primary-hover active:bg-primary-hover; }
   .btn-secondary { @apply btn border border-line bg-surface text-ink hover:bg-surface-muted active:bg-line/60; }
   .btn-danger { @apply btn border border-danger/30 bg-surface text-danger hover:bg-danger-soft; }
+  .btn-success { @apply btn border border-success/30 bg-success-soft text-success hover:border-success/50 hover:bg-success-soft/70; }
   .btn-sm { @apply min-h-touch px-3 py-1 text-xs md:min-h-[2rem]; }
   .btn-icon { @apply btn min-h-touch min-w-[2.75rem] px-2 md:min-h-[2rem] md:min-w-[2rem]; }
 

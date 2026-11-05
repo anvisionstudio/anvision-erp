@@ -17,21 +17,39 @@ export function SubmitButton({ children, className = "btn-primary" }: { children
 }
 
 /** 需要確認的動作按鈕（刪除、作廢等）。內容為「✕」時顯示垃圾桶圖示並附無障礙名稱 */
-export function ConfirmButton({ action, children, message = "確定要執行嗎？", className = "btn-danger btn-sm", label }: { action: () => Promise<void>; children: ReactNode; message?: string; className?: string; label?: string }) {
+export function ConfirmButton({ action, children, message = "確定要執行嗎？", className = "btn-danger btn-sm", label }: { action: () => Promise<unknown>; children: ReactNode; message?: string; className?: string; label?: string }) {
   const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const iconOnly = children === "✕";
+  const run = () => start(async () => {
+    setError(null);
+    try {
+      const r = await action();
+      if (r && typeof r === "object" && "error" in r && (r as { error?: string }).error) setError((r as { error: string }).error);
+    } catch {
+      setError("操作失敗，請重新整理後再試");
+    }
+  });
   return (
-    <button
-      type="button"
-      className={iconOnly ? `${className} btn-icon` : className}
-      disabled={pending}
-      aria-busy={pending}
-      aria-label={iconOnly ? label ?? "刪除" : label}
-      title={iconOnly ? label ?? "刪除" : undefined}
-      onClick={() => confirm(message) && start(() => action())}
-    >
-      {pending ? <Spinner /> : iconOnly ? <Trash2 className="h-4 w-4" aria-hidden /> : children}
-    </button>
+    <span className="relative inline-flex">
+      <button
+        type="button"
+        className={iconOnly ? `${className} btn-icon` : className}
+        disabled={pending}
+        aria-busy={pending}
+        aria-label={iconOnly ? label ?? "刪除" : label}
+        title={iconOnly ? label ?? "刪除" : undefined}
+        onClick={() => confirm(message) && run()}
+      >
+        {pending ? <Spinner /> : iconOnly ? <Trash2 className="h-4 w-4" aria-hidden /> : children}
+      </button>
+      {error && (
+        <span role="alert" className="absolute right-0 top-full z-dropdown mt-1 w-max max-w-[18rem] rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-left text-xs font-normal text-danger shadow-md">
+          {error}
+          <button type="button" className="ml-2 underline" onClick={() => setError(null)}>關閉</button>
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -241,5 +259,15 @@ export function JournalLines({ accounts }: { accounts: { id: string; label: stri
         </div>
       </div>
     </fieldset>
+  );
+}
+
+/** 表單送出前跳確認視窗（例如合併、批次刪除） */
+export function ConfirmSubmit({ children, message, className = "btn-danger" }: { children: ReactNode; message: string; className?: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" className={className} disabled={pending} aria-busy={pending} onClick={(e) => { if (!confirm(message)) e.preventDefault(); }}>
+      {pending ? <><Spinner />處理中…</> : children}
+    </button>
   );
 }

@@ -1,4 +1,5 @@
 "use server";
+import { guard } from "@/lib/guard";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
@@ -38,26 +39,30 @@ export async function saveInvoice(f: FormData) {
 }
 
 export async function setInvoiceStatus(id: string, status: "DRAFT" | "ISSUED" | "VOID") {
-  const u = await requireUser("finance");
-  await db.$transaction(async (tx) => {
-    const inv = await tx.invoice.findUniqueOrThrow({ where: { id }, include: { payments: true } });
-    if (status !== "ISSUED" && inv.payments.length) throw new Error("已有收款紀錄，請先刪除收款再變更狀態");
-    await tx.invoice.update({ where: { id }, data: { status } });
-    await postInvoice(tx, id);
-    await refreshInvoiceStatus(tx, id);
+  return guard(async () => {
+    const u = await requireUser("finance");
+    await db.$transaction(async (tx) => {
+      const inv = await tx.invoice.findUniqueOrThrow({ where: { id }, include: { payments: true } });
+      if (status !== "ISSUED" && inv.payments.length) throw new Error("已有收款紀錄，請先刪除收款再變更狀態");
+      await tx.invoice.update({ where: { id }, data: { status } });
+      await postInvoice(tx, id);
+      await refreshInvoiceStatus(tx, id);
+    });
+    await audit(u.id, "狀態 → " + status, "請款單", id);
+    revalidatePath(`/invoices/${id}`);
+    revalidatePath("/invoices");
   });
-  await audit(u.id, "狀態 → " + status, "請款單", id);
-  revalidatePath(`/invoices/${id}`);
-  revalidatePath("/invoices");
 }
 
 export async function deleteInvoice(id: string) {
-  const u = await requireUser("finance");
-  const inv = await db.invoice.findUniqueOrThrow({ where: { id } });
-  if (inv.status !== "DRAFT") throw new Error("只能刪除草稿，已開立的請款單請改為作廢");
-  await db.invoice.delete({ where: { id } });
-  await audit(u.id, "刪除", "請款單", id, inv.number);
-  redirect("/invoices");
+  return guard(async () => {
+    const u = await requireUser("finance");
+    const inv = await db.invoice.findUniqueOrThrow({ where: { id } });
+    if (inv.status !== "DRAFT") throw new Error("只能刪除草稿，已開立的請款單請改為作廢");
+    await db.invoice.delete({ where: { id } });
+    await audit(u.id, "刪除", "請款單", id, inv.number);
+    redirect("/invoices");
+  });
 }
 
 export async function addPayment(f: FormData) {
@@ -79,15 +84,17 @@ export async function addPayment(f: FormData) {
 }
 
 export async function deletePayment(id: string) {
-  const u = await requireUser("finance");
-  const p = await db.$transaction(async (tx) => {
-    await removePaymentEntry(tx, id);
-    const p = await tx.payment.delete({ where: { id } });
-    await refreshInvoiceStatus(tx, p.invoiceId);
-    return p;
+  return guard(async () => {
+    const u = await requireUser("finance");
+    const p = await db.$transaction(async (tx) => {
+      await removePaymentEntry(tx, id);
+      const p = await tx.payment.delete({ where: { id } });
+      await refreshInvoiceStatus(tx, p.invoiceId);
+      return p;
+    });
+    await audit(u.id, "刪除收款", "請款單", p.invoiceId, String(p.amount));
+    revalidatePath(`/invoices/${p.invoiceId}`);
   });
-  await audit(u.id, "刪除收款", "請款單", p.invoiceId, String(p.amount));
-  revalidatePath(`/invoices/${p.invoiceId}`);
 }
 
 // ── 費用 / 應付 ──
@@ -112,23 +119,27 @@ export async function saveExpense(f: FormData) {
 }
 
 export async function payExpense(id: string) {
-  const u = await requireUser("finance");
-  await db.$transaction(async (tx) => {
-    await tx.expense.update({ where: { id }, data: { status: "PAID", paidDate: new Date() } });
-    await postExpense(tx, id);
+  return guard(async () => {
+    const u = await requireUser("finance");
+    await db.$transaction(async (tx) => {
+      await tx.expense.update({ where: { id }, data: { status: "PAID", paidDate: new Date() } });
+      await postExpense(tx, id);
+    });
+    await audit(u.id, "付款", "費用", id);
+    revalidatePath("/expenses");
   });
-  await audit(u.id, "付款", "費用", id);
-  revalidatePath("/expenses");
 }
 
 export async function deleteExpense(id: string) {
-  const u = await requireUser("finance");
-  await db.$transaction(async (tx) => {
-    await removeExpenseEntries(tx, id);
-    await tx.expense.delete({ where: { id } });
+  return guard(async () => {
+    const u = await requireUser("finance");
+    await db.$transaction(async (tx) => {
+      await removeExpenseEntries(tx, id);
+      await tx.expense.delete({ where: { id } });
+    });
+    await audit(u.id, "刪除", "費用", id);
+    revalidatePath("/expenses");
   });
-  await audit(u.id, "刪除", "費用", id);
-  revalidatePath("/expenses");
 }
 
 // ── 傳票 / 科目 ──
@@ -146,12 +157,14 @@ export async function saveJournal(f: FormData) {
 }
 
 export async function deleteJournal(id: string) {
-  const u = await requireUser("finance");
-  const e = await db.journalEntry.findUniqueOrThrow({ where: { id } });
-  if (e.source !== "MANUAL") throw new Error("系統自動產生的傳票，請從原始單據修改");
-  await db.journalEntry.delete({ where: { id } });
-  await audit(u.id, "刪除", "傳票", id, e.number);
-  revalidatePath("/accounting");
+  return guard(async () => {
+    const u = await requireUser("finance");
+    const e = await db.journalEntry.findUniqueOrThrow({ where: { id } });
+    if (e.source !== "MANUAL") throw new Error("系統自動產生的傳票，請從原始單據修改");
+    await db.journalEntry.delete({ where: { id } });
+    await audit(u.id, "刪除", "傳票", id, e.number);
+    revalidatePath("/accounting");
+  });
 }
 
 export async function saveAccount(f: FormData) {
