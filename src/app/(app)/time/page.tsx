@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { date, num, isoDate } from "@/lib/format";
@@ -38,11 +39,11 @@ export default async function TimePage({ searchParams }: { searchParams: Promise
         actions={<>
           {canAll && (
             <form className="flex gap-2"><input type="hidden" name="week" value={isoDate(start)} />
-              <Select name="user" defaultValue={userId} options={users.map((u) => ({ value: u.id, label: u.name }))} /><button className="btn-secondary">切換</button></form>
+              <Select name="user" label="成員" defaultValue={userId} options={users.map((u) => ({ value: u.id, label: u.name }))} /><button className="btn-secondary">切換</button></form>
           )}
-          <Link className="btn-secondary" href={q(prev)}>← 上週</Link>
+          <Link className="btn-secondary" href={q(prev)}><ChevronLeft className="h-4 w-4" aria-hidden />上週</Link>
           <Link className="btn-secondary" href="/time">本週</Link>
-          <Link className="btn-secondary" href={q(end)}>下週 →</Link>
+          <Link className="btn-secondary" href={q(end)}>下週<ChevronRight className="h-4 w-4" aria-hidden /></Link>
         </>} />
 
       <Card title="登錄工時" className="mb-6">

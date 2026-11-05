@@ -33,9 +33,9 @@ export default async function Invoices({ searchParams }: { searchParams: Promise
               <tr key={i.id}>
                 <td><Link href={`/invoices/${i.id}`} className="link">{i.number}</Link></td>
                 <td className="font-mono text-xs">{i.gui}</td>
-                <td>{i.client.name}<div className="text-xs text-slate-500">{i.project?.name}</div></td>
+                <td>{i.client.name}<div className="text-xs text-ink-muted">{i.project?.name}</div></td>
                 <td>{date(i.issueDate)}</td>
-                <td className={i.dueDate && i.dueDate < now && a.balance > 0 && i.status !== "DRAFT" ? "font-medium text-red-600" : ""}>{date(i.dueDate)}</td>
+                <td className={i.dueDate && i.dueDate < now && a.balance > 0 && i.status !== "DRAFT" ? "font-medium text-danger" : ""}>{date(i.dueDate)}</td>
                 <td className="num">{twd(a.total)}</td>
                 <td className="num">{i.status === "VOID" ? "—" : twd(a.balance)}</td>
                 <td><Badge status={i.status} /></td>

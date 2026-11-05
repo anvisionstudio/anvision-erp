@@ -20,7 +20,7 @@ export default async function Projects({ searchParams }: { searchParams: Promise
       <PageHeader title="專案" sub={`${projects.length} 個專案`} actions={user.role !== "STAFF" && <Link href="/projects/new" className="btn-primary">＋ 新增專案</Link>} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Tabs active={status} tabs={TABS.map(([k, l]) => ({ key: k, label: l, href: `/projects?status=${k}` }))} />
-        <form className="mb-4"><input type="hidden" name="status" value={status} /><input name="q" defaultValue={q} placeholder="搜尋專案…" className="input w-56" /></form>
+        <form className="mb-4"><input type="hidden" name="status" value={status} /><input type="search" aria-label="搜尋專案" name="q" defaultValue={q} placeholder="搜尋專案…" className="input w-full sm:w-56" /></form>
       </div>
       <Card pad={false}>
         {projects.length === 0 ? <Empty /> : (
@@ -31,12 +31,12 @@ export default async function Projects({ searchParams }: { searchParams: Promise
               const pct = p.tasks.length ? Math.round((done / p.tasks.length) * 100) : 0;
               return (
                 <tr key={p.id}>
-                  <td className="font-mono text-xs text-slate-500">{p.code}</td>
+                  <td className="font-mono text-xs text-ink-muted">{p.code}</td>
                   <td><Link href={`/projects/${p.id}`} className="link">{p.name}</Link></td>
-                  <td>{p.client?.name ?? <span className="text-slate-400">內部</span>}</td>
+                  <td>{p.client?.name ?? <span className="text-ink-muted">內部</span>}</td>
                   <td>{p.manager?.name}</td>
-                  <td className="w-32"><div className="h-1.5 rounded-full bg-slate-100"><div className="h-1.5 rounded-full bg-brand-500" style={{ width: `${pct}%` }} /></div><div className="text-xs text-slate-500">{pct}%</div></td>
-                  <td className={p.dueDate && p.dueDate < new Date() && p.status === "ACTIVE" ? "text-red-600" : ""}>{date(p.dueDate)}</td>
+                  <td className="w-32"><div className="h-1.5 rounded-full bg-surface-muted"><div className="h-1.5 rounded-full bg-brand-500" style={{ width: `${pct}%` }} /></div><div className="text-xs text-ink-muted">{pct}%</div></td>
+                  <td className={p.dueDate && p.dueDate < new Date() && p.status === "ACTIVE" ? "text-danger" : ""}>{date(p.dueDate)}</td>
                   <td className="num">{twd(p.budget)}</td>
                   <td><Badge status={p.status} /></td>
                 </tr>

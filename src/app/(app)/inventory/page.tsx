@@ -53,7 +53,7 @@ export default async function Inventory({ searchParams }: { searchParams: Promis
           </Card>
           {manage && (
             <Card title={e ? `編輯 ${e.name}` : "新增品項"}>
-              <form action={saveItem} className="grid grid-cols-2 gap-3">
+              <form action={saveItem} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                 {e && <input type="hidden" name="id" value={e.id} />}
                 <Field label="SKU *"><input name="sku" required defaultValue={e?.sku} className="input" /></Field>
                 <Field label="品名 *"><input name="name" required defaultValue={e?.name} className="input" /></Field>
@@ -64,7 +64,7 @@ export default async function Inventory({ searchParams }: { searchParams: Promis
                 {!e && <Field label="期初數量"><input name="quantity" type="number" step="any" defaultValue={0} className="input" /></Field>}
                 <Field label="存放位置"><input name="location" defaultValue={e?.location ?? ""} className="input" /></Field>
                 <datalist id="cats">{[...new Set(items.map((i) => i.category).filter(Boolean))].map((c) => <option key={c} value={c!} />)}</datalist>
-                <div className="col-span-2 flex gap-2"><SubmitButton>儲存</SubmitButton>{e && <Link href="/inventory" className="btn-secondary">取消</Link>}</div>
+                <div className="flex gap-2 sm:col-span-2 lg:col-span-1 xl:col-span-2"><SubmitButton>儲存</SubmitButton>{e && <Link href="/inventory" className="btn-secondary">取消</Link>}</div>
               </form>
             </Card>
           )}
@@ -72,7 +72,7 @@ export default async function Inventory({ searchParams }: { searchParams: Promis
         <Card title={sp.item ? `異動紀錄：${items.find((i) => i.id === sp.item)?.name ?? ""}` : "最近異動"} pad={false} className="lg:col-span-3">
           {moves.length === 0 ? <Empty /> : (
             <table className="tbl"><tbody>{moves.map((m) => (
-              <tr key={m.id}><td>{date(m.date)}</td><td>{m.item.name}</td><td>{m.reason}</td><td className={`num ${m.change < 0 ? "text-red-600" : "text-emerald-600"}`}>{m.change > 0 ? "+" : ""}{num(m.change)} {m.item.unit}</td></tr>
+              <tr key={m.id}><td>{date(m.date)}</td><td>{m.item.name}</td><td>{m.reason}</td><td className={`num ${m.change < 0 ? "text-danger" : "text-success"}`}>{m.change > 0 ? "+" : ""}{num(m.change)} {m.item.unit}</td></tr>
             ))}</tbody></table>
           )}
         </Card>

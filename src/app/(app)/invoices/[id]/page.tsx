@@ -33,32 +33,32 @@ export default async function InvoiceDetail({ params }: { params: Promise<{ id: 
           <DocumentView kind="請款單" number={inv.number} party={inv.client} partyLabel="客戶" showBank
             meta={[["開立日期", date(inv.issueDate)], ["付款期限", date(inv.dueDate)], ...(inv.gui ? [["發票號碼", inv.gui] as [string, string]] : []), ...(inv.project ? [["專案", inv.project.name] as [string, string]] : [])]}
             items={inv.items} taxRate={inv.taxRate} notes={inv.notes}
-            footer={a.paid > 0 && <><div className="flex justify-between text-emerald-700"><span>已收款</span><span>{twd(a.paid)}</span></div><div className="flex justify-between font-medium"><span>未收餘額</span><span>{twd(a.balance)}</span></div></>} />
+            footer={a.paid > 0 && <><div className="flex justify-between text-success"><span>已收款</span><span>{twd(a.paid)}</span></div><div className="flex justify-between font-medium"><span>未收餘額</span><span>{twd(a.balance)}</span></div></>} />
         </div>
         <div className="no-print space-y-6">
           <Card title="收款紀錄" pad={false}>
             <table className="tbl"><tbody>
               {inv.payments.map((p) => (
-                <tr key={p.id}><td>{date(p.date)}<div className="text-xs text-slate-500">{p.method} {p.note}</div></td><td className="num">{twd(p.amount)}</td>
+                <tr key={p.id}><td>{date(p.date)}<div className="text-xs text-ink-muted">{p.method} {p.note}</div></td><td className="num">{twd(p.amount)}</td>
                   <td className="text-right"><ConfirmButton action={deletePayment.bind(null, p.id)} message="刪除這筆收款？">✕</ConfirmButton></td></tr>
               ))}
-              {inv.payments.length === 0 && <tr><td className="text-center text-slate-400">尚無收款</td></tr>}
+              {inv.payments.length === 0 && <tr><td className="text-center text-ink-muted">尚無收款</td></tr>}
             </tbody></table>
             {open && (
-              <form action={addPayment} className="grid grid-cols-2 gap-3 border-t border-slate-100 p-4">
+              <form action={addPayment} className="grid grid-cols-1 gap-3 border-t sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2 border-line p-4">
                 <input type="hidden" name="invoiceId" value={inv.id} />
                 <Field label="收款日"><input type="date" name="date" defaultValue={isoDate(new Date())} className="input" /></Field>
                 <Field label="金額"><input type="number" name="amount" defaultValue={a.balance} className="input" /></Field>
                 <Field label="方式"><Select name="method" options={["轉帳", "現金", "支票", "信用卡"].map((v) => ({ value: v, label: v }))} /></Field>
                 <Field label="備註"><input name="note" className="input" placeholder="例如：扣手續費 15" /></Field>
-                <div className="col-span-2"><SubmitButton>登錄收款</SubmitButton></div>
+                <div className="sm:col-span-2 xl:col-span-1 2xl:col-span-2"><SubmitButton>登錄收款</SubmitButton></div>
               </form>
             )}
           </Card>
           <Card title="相關傳票" pad={false}>
             <table className="tbl"><tbody>
               {entries.map((e) => <tr key={e.id}><td><Link className="link" href={`/accounting?q=${e.number}`}>{e.number}</Link></td><td className="text-xs">{e.memo}</td></tr>)}
-              {entries.length === 0 && <tr><td className="text-center text-slate-400">開立後自動產生</td></tr>}
+              {entries.length === 0 && <tr><td className="text-center text-ink-muted">開立後自動產生</td></tr>}
             </tbody></table>
           </Card>
         </div>

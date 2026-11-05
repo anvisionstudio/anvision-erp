@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { date } from "@/lib/format";
@@ -27,9 +28,9 @@ export default async function MyTasks({ searchParams }: { searchParams: Promise<
               <tr key={t.id}>
                 <td className="font-medium">{t.title}</td>
                 <td><Link className="link" href={`/projects/${t.projectId}`}>{t.project.name}</Link></td>
-                <td className={t.dueDate && t.dueDate < new Date() && t.status !== "DONE" ? "text-red-600" : ""}>{date(t.dueDate)}</td>
+                <td className={t.dueDate && t.dueDate < new Date() && t.status !== "DONE" ? "text-danger" : ""}>{date(t.dueDate)}</td>
                 <td><Badge status={t.status} /></td>
-                <td className="text-right">{next[t.status] && <ConfirmButton action={setTaskStatus.bind(null, t.id, next[t.status])} message="推進到下一階段？" className="btn-secondary btn-sm">下一步 →</ConfirmButton>}</td>
+                <td className="text-right">{next[t.status] && <ConfirmButton action={setTaskStatus.bind(null, t.id, next[t.status])} message="推進到下一階段？" className="btn-secondary btn-sm">下一步<ArrowRight className="h-3.5 w-3.5" aria-hidden /></ConfirmButton>}</td>
               </tr>
             ))}</tbody>
           </table>

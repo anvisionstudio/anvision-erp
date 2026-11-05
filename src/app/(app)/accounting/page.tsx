@@ -27,10 +27,10 @@ export default async function Journal({ searchParams }: { searchParams: Promise<
     <>
       <PageHeader title="傳票 / 總帳" sub="Excel 日記簿同步的傳票、ERP 自動產生的傳票與手動傳票" actions={<Link href="/accounting/new" className="btn-primary">＋ 手動傳票</Link>} />
       <form className="mb-4 flex flex-wrap gap-2">
-        <input name="q" defaultValue={sp.q} placeholder="傳票號 / 摘要 / 專案" className="input w-56" />
-        <input type="date" name="from" defaultValue={sp.from} className="input w-40" />
-        <input type="date" name="to" defaultValue={sp.to} className="input w-40" />
-        <select name="account" defaultValue={sp.account ?? ""} className="input w-56"><option value="">所有科目</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}</select>
+        <input type="search" aria-label="傳票號 / 摘要 / 專案" name="q" defaultValue={sp.q} placeholder="傳票號 / 摘要 / 專案" className="input w-full sm:w-56" />
+        <input type="date" aria-label="起始日期" name="from" defaultValue={sp.from} className="input w-full sm:w-40" />
+        <input type="date" aria-label="結束日期" name="to" defaultValue={sp.to} className="input w-full sm:w-40" />
+        <select aria-label="會計科目" name="account" defaultValue={sp.account ?? ""} className="input w-full sm:w-56"><option value="">所有科目</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}</select>
         <button className="btn-secondary">查詢</button>
       </form>
       <Card pad={false}>
@@ -39,7 +39,7 @@ export default async function Journal({ searchParams }: { searchParams: Promise<
             <thead><tr><th>日期</th><th>傳票號</th><th>來源</th><th>摘要 / 科目</th><th className="text-right">借方</th><th className="text-right">貸方</th><th /></tr></thead>
             <tbody>{entries.map((e) => (
               <Fragment key={e.id}>
-                <tr className="bg-slate-50/60">
+                <tr className="bg-surface-muted">
                   <td className="font-medium">{date(e.date)}</td><td className="font-mono text-xs">{e.number}</td>
                   <td><Badge label={SRC[e.source] ?? e.source} tone={e.source === "MANUAL" ? "gray" : e.source === "IMPORT" ? "green" : "blue"} /></td>
                   <td colSpan={3} className="font-medium">
@@ -51,7 +51,7 @@ export default async function Journal({ searchParams }: { searchParams: Promise<
                 {e.lines.map((l) => (
                   <tr key={l.id}>
                     <td /><td /><td />
-                    <td className={l.credit ? "pl-10" : "pl-4"}>{l.account.code} {l.account.name}{l.memo && <span className="text-xs text-slate-400">　{l.memo}</span>}{l.project && l.project !== "公司" && <span className="ml-2 rounded bg-brand-50 px-1.5 text-[11px] text-brand-700">{l.project}</span>}</td>
+                    <td className={l.credit ? "pl-10" : "pl-4"}>{l.account.code} {l.account.name}{l.memo && <span className="text-xs text-ink-muted">　{l.memo}</span>}{l.project && l.project !== "公司" && <span className="ml-2 rounded bg-brand-50 px-1.5 text-xs text-brand-700">{l.project}</span>}</td>
                     <td className="num">{l.debit ? num(l.debit) : ""}</td><td className="num">{l.credit ? num(l.credit) : ""}</td><td />
                   </tr>
                 ))}

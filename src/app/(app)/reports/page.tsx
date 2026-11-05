@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { twd, date, num, isoDate } from "@/lib/format";
@@ -11,7 +12,7 @@ const TABS = [["pl", "損益表"], ["bs", "資產負債表"], ["tb", "試算表"
 
 function Row({ label, value, bold, indent }: { label: string; value: number; bold?: boolean; indent?: boolean }) {
   return (
-    <div className={`flex justify-between py-1.5 text-sm ${bold ? "border-t border-slate-200 font-semibold" : ""} ${indent ? "pl-4" : ""}`}>
+    <div className={`flex justify-between py-1.5 text-sm ${bold ? "border-t border-line font-semibold" : ""} ${indent ? "pl-4" : ""}`}>
       <span>{label}</span><span className="tabular-nums">{twd(value)}</span>
     </div>
   );
@@ -27,8 +28,8 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
   const range = (
     <form className="no-print mb-4 flex flex-wrap items-center gap-2">
       <input type="hidden" name="tab" value={tab} />
-      {tab !== "bs" && <><input type="date" name="from" defaultValue={isoDate(from)} className="input w-40" /><span className="text-slate-400">至</span></>}
-      <input type="date" name="to" defaultValue={isoDate(to)} className="input w-40" />
+      {tab !== "bs" && <><input type="date" aria-label="起始日期" name="from" defaultValue={isoDate(from)} className="input w-full sm:w-40" /><span className="text-ink-muted">至</span></>}
+      <input type="date" aria-label="截止日期" name="to" defaultValue={isoDate(to)} className="input w-full sm:w-40" />
       <button className="btn-secondary">更新</button>
     </form>
   );
@@ -53,16 +54,16 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
           </div>
           <Card title={`損益表　${date(from)} – ${date(to)}`}>
             <div className="max-w-xl">
-              <div className="text-xs font-medium text-slate-500">營業收入</div>
+              <div className="text-xs font-medium text-ink-muted">營業收入</div>
               {pl.revenue.map((r) => <Row key={r.id} label={`${r.code} ${r.name}`} value={r.balance} indent />)}
               <Row label="收入合計" value={pl.totalRevenue} bold />
-              <div className="mt-4 text-xs font-medium text-slate-500">營業成本</div>
+              <div className="mt-4 text-xs font-medium text-ink-muted">營業成本</div>
               {cost.map((r) => <Row key={r.id} label={`${r.code} ${r.name}`} value={r.balance} indent />)}
               <Row label="營業毛利" value={gross} bold />
-              <div className="mt-4 text-xs font-medium text-slate-500">營業費用</div>
+              <div className="mt-4 text-xs font-medium text-ink-muted">營業費用</div>
               {opex.map((r) => <Row key={r.id} label={`${r.code} ${r.name}`} value={r.balance} indent />)}
               <Row label="費用合計" value={opex.reduce((s, r) => s + r.balance, 0)} bold />
-              <div className="mt-4 border-t-2 border-slate-800"><Row label="本期淨利（稅前）" value={pl.net} bold /></div>
+              <div className="mt-4 border-t-2 border-ink"><Row label="本期淨利（稅前）" value={pl.net} bold /></div>
             </div>
           </Card>
         </>);
@@ -85,8 +86,8 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
               {bs.equity.map((r) => <Row key={r.id} label={`${r.code} ${r.name}`} value={r.balance} />)}
               <Row label="本期損益" value={bs.earnings} />
               <Row label="權益合計" value={bs.totalEquity} bold />
-              <div className="mt-2 border-t-2 border-slate-800"><Row label="負債及權益總計" value={bs.totalLiabilities + bs.totalEquity} bold /></div>
-              <div className={`mt-2 text-xs ${balanced ? "text-emerald-600" : "text-red-600"}`}>{balanced ? "✓ 資產 = 負債 + 權益" : "⚠ 帳務不平衡，請檢查傳票"}</div>
+              <div className="mt-2 border-t-2 border-ink"><Row label="負債及權益總計" value={bs.totalLiabilities + bs.totalEquity} bold /></div>
+              <div className={`mt-2 text-xs ${balanced ? "text-success" : "text-danger"}`}>{balanced ? <><CheckCircle2 className="mr-1 inline h-3.5 w-3.5" aria-hidden />資產 = 負債 + 權益</> : <><AlertTriangle className="mr-1 inline h-3.5 w-3.5" aria-hidden />帳務不平衡，請檢查傳票</>}</div>
             </Card>
           </div>
         </>);
@@ -102,7 +103,7 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
               <thead><tr><th>代碼</th><th>科目</th><th>類別</th><th className="text-right">借方</th><th className="text-right">貸方</th></tr></thead>
               <tbody>
                 {rows.map((r) => <tr key={r.id}><td className="font-mono">{r.code}</td><td><Link className="link" href={`/accounting?account=${r.id}`}>{r.name}</Link></td><td>{ACCOUNT_TYPE_LABEL[r.type]}</td><td className="num">{num(r.debit)}</td><td className="num">{num(r.credit)}</td></tr>)}
-                <tr className="font-semibold"><td colSpan={3}>合計 {Math.abs(d - c) < 0.01 ? "✓" : "⚠ 不平衡"}</td><td className="num">{num(d)}</td><td className="num">{num(c)}</td></tr>
+                <tr className="font-semibold"><td colSpan={3}>合計 {Math.abs(d - c) < 0.01 ? <span className="text-success"><CheckCircle2 className="mr-1 inline h-3.5 w-3.5" aria-hidden />平衡</span> : <span className="text-danger"><AlertTriangle className="mr-1 inline h-3.5 w-3.5" aria-hidden />不平衡</span>}</td><td className="num">{num(d)}</td><td className="num">{num(c)}</td></tr>
               </tbody>
             </table>
           </Card>
@@ -139,11 +140,11 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
                 <thead><tr><th>專案</th><th>狀態</th><th className="text-right">合約</th><th className="text-right">已請款</th><th className="text-right">直接費用</th><th className="text-right">工時</th><th className="text-right">人工成本</th><th className="text-right">毛利</th><th className="text-right">毛利率</th></tr></thead>
                 <tbody>{rows.map((r) => (
                   <tr key={r.project.id}>
-                    <td><Link className="link" href={`/projects/${r.project.id}?tab=finance`}>{r.project.name}</Link><div className="text-xs text-slate-500">{r.project.client?.name}</div></td>
+                    <td><Link className="link" href={`/projects/${r.project.id}?tab=finance`}>{r.project.name}</Link><div className="text-xs text-ink-muted">{r.project.client?.name}</div></td>
                     <td><Badge status={r.project.status} /></td>
                     <td className="num">{twd(r.project.budget)}</td><td className="num">{twd(r.invoiced)}</td><td className="num">{twd(r.expenses)}</td>
                     <td className="num">{num(r.hours, 1)}</td><td className="num">{twd(r.labor)}</td>
-                    <td className={`num font-medium ${r.profit < 0 ? "text-red-600" : ""}`}>{twd(r.profit)}</td>
+                    <td className={`num font-medium ${r.profit < 0 ? "text-danger" : ""}`}>{twd(r.profit)}</td>
                     <td className="num">{r.invoiced ? `${Math.round(r.margin * 100)}%` : "—"}</td>
                   </tr>
                 ))}</tbody>
@@ -171,13 +172,13 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
         const filed: Vat[] = raw ? (JSON.parse(raw) as Vat[]).filter((v) => v.period.startsWith(String(year))) : [];
         const n = (v: number | null) => (v === null ? "—" : twd(v));
         return (<>
-          <form className="no-print mb-4 flex gap-2"><input type="hidden" name="tab" value="vat" /><input type="number" name="year" defaultValue={year} className="input w-28" /><button className="btn-secondary">年度</button></form>
+          <form className="no-print mb-4 flex gap-2"><input type="hidden" name="tab" value="vat" /><input type="number" inputMode="numeric" aria-label="年度" name="year" defaultValue={year} className="input w-full sm:w-28" /><button className="btn-secondary">年度</button></form>
           {filed.length > 0 && (
             <Card title={`${year} 年營業稅申報（Excel 發票資料）`} pad={false} className="mb-6">
               <table className="tbl">
                 <thead><tr><th>期別</th><th className="text-right">銷項稅額</th><th className="text-right">進項稅額</th><th className="text-right">進項稅額-內帳</th><th className="text-right">預計應納</th><th className="text-right">與會計師差異</th><th className="text-right">實繳</th><th className="text-right">留底</th></tr></thead>
                 <tbody>{filed.map((v) => (
-                  <tr key={v.period}><td>{v.period}{v.note && <div className="text-xs text-slate-400">{v.note}</div>}</td><td className="num">{n(v.output)}</td><td className="num">{n(v.input)}</td><td className="num">{n(v.inputInternal)}</td><td className="num">{n(v.estimated)}</td><td className="num">{n(v.diff)}</td><td className="num font-medium">{n(v.paid)}</td><td className="num">{n(v.carry)}</td></tr>
+                  <tr key={v.period}><td>{v.period}{v.note && <div className="text-xs text-ink-muted">{v.note}</div>}</td><td className="num">{n(v.output)}</td><td className="num">{n(v.input)}</td><td className="num">{n(v.inputInternal)}</td><td className="num">{n(v.estimated)}</td><td className="num">{n(v.diff)}</td><td className="num font-medium">{n(v.paid)}</td><td className="num">{n(v.carry)}</td></tr>
                 ))}</tbody>
               </table>
             </Card>
@@ -186,10 +187,10 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
             <table className="tbl">
               <thead><tr><th>期別</th><th className="text-right">銷項稅額（貸方）</th><th className="text-right">進項稅額（借方）</th><th className="text-right">差額</th></tr></thead>
               <tbody>{periods.map((p) => (
-                <tr key={p.label}><td>{p.label}</td><td className="num">{twd(p.output)}</td><td className="num">{twd(p.input)}</td><td className={`num font-medium ${p.payable < 0 ? "text-emerald-600" : ""}`}>{twd(p.payable)}</td></tr>
+                <tr key={p.label}><td>{p.label}</td><td className="num">{twd(p.output)}</td><td className="num">{twd(p.input)}</td><td className={`num font-medium ${p.payable < 0 ? "text-success" : ""}`}>{twd(p.payable)}</td></tr>
               ))}</tbody>
             </table>
-            <p className="p-4 text-xs text-slate-400">依傳票入帳日期彙總「銷項稅額」貸方與「進項稅額」借方（不含繳稅沖轉），與實際申報期別可能不同；申報請以上方 Excel 發票資料或會計師為準。</p>
+            <p className="p-4 text-xs text-ink-muted">依傳票入帳日期彙總「銷項稅額」貸方與「進項稅額」借方（不含繳稅沖轉），與實際申報期別可能不同；申報請以上方 Excel 發票資料或會計師為準。</p>
           </Card>
         </>);
       })()}

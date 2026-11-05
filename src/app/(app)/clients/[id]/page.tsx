@@ -46,12 +46,12 @@ export default async function ClientDetail({ params }: { params: Promise<{ id: s
           </Card>
           <Card title="報價單" pad={false}>
             {c.quotes.length === 0 ? <Empty /> : <table className="tbl"><tbody>{c.quotes.map((q) => (
-              <tr key={q.id}><td><Link className="link" href={`/quotes/${q.id}`}>{q.number}</Link><div className="text-xs text-slate-500">{q.title}</div></td><td className="num">{twd(totals(q.items, q.taxRate).total)}</td><td><Badge status={q.status} /></td></tr>
+              <tr key={q.id}><td><Link className="link" href={`/quotes/${q.id}`}>{q.number}</Link><div className="text-xs text-ink-muted">{q.title}</div></td><td className="num">{twd(totals(q.items, q.taxRate).total)}</td><td><Badge status={q.status} /></td></tr>
             ))}</tbody></table>}
           </Card>
           <Card title="請款單" pad={false}>
             {c.invoices.length === 0 ? <Empty /> : <table className="tbl"><tbody>{c.invoices.map((i) => (
-              <tr key={i.id}><td><Link className="link" href={`/invoices/${i.id}`}>{i.number}</Link><div className="text-xs text-slate-500">{date(i.issueDate)}</div></td><td className="num">{twd(totals(i.items, i.taxRate).total)}</td><td><Badge status={i.status} /></td></tr>
+              <tr key={i.id}><td><Link className="link" href={`/invoices/${i.id}`}>{i.number}</Link><div className="text-xs text-ink-muted">{date(i.issueDate)}</div></td><td className="num">{twd(totals(i.items, i.taxRate).total)}</td><td><Badge status={i.status} /></td></tr>
             ))}</tbody></table>}
           </Card>
         </div>

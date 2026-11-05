@@ -52,7 +52,7 @@ export default async function Expenses({ searchParams }: { searchParams: Promise
       <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4"><Stat label="列表中未付金額（含稅）" value={twd(unpaid)} /></div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Tabs active={status} tabs={[["UNPAID", "未付款"], ["PAID", "已付款"], ["ALL", "全部"]].map(([k, l]) => ({ key: k, label: l, href: `/expenses?status=${k}${sp.month ? "&month=" + sp.month : ""}` }))} />
-        <form className="mb-4 flex gap-2"><input type="hidden" name="status" value={status} /><input type="month" name="month" defaultValue={sp.month} className="input" /><button className="btn-secondary">篩選</button></form>
+        <form className="mb-4 flex gap-2"><input type="hidden" name="status" value={status} /><input type="month" aria-label="月份" name="month" defaultValue={sp.month} className="input" /><button className="btn-secondary">篩選</button></form>
       </div>
       <Card pad={false}>
         {expenses.length === 0 ? <Empty /> : (
@@ -61,11 +61,11 @@ export default async function Expenses({ searchParams }: { searchParams: Promise
             <tbody>{expenses.map((x) => (
               <tr key={x.id}>
                 <td>{date(x.date)}</td>
-                <td>{x.description}<div className="text-xs text-slate-400">{x.receiptNo}</div></td>
+                <td>{x.description}<div className="text-xs text-ink-muted">{x.receiptNo}</div></td>
                 <td className="text-xs">{x.account.code} {x.account.name}</td>
-                <td>{x.vendor?.name}<div className="text-xs text-slate-500">{x.project?.name}</div></td>
+                <td>{x.vendor?.name}<div className="text-xs text-ink-muted">{x.project?.name}</div></td>
                 <td className="num">{twd(x.amount)}</td><td className="num">{twd(x.tax)}</td>
-                <td className={x.status === "UNPAID" && x.dueDate && x.dueDate < new Date() ? "text-red-600" : ""}>{date(x.dueDate)}</td>
+                <td className={x.status === "UNPAID" && x.dueDate && x.dueDate < new Date() ? "text-danger" : ""}>{date(x.dueDate)}</td>
                 <td><Badge status={x.status} /></td>
                 <td className="whitespace-nowrap text-right">
                   {x.status === "UNPAID" && <ConfirmButton action={payExpense.bind(null, x.id)} message="標記為已付款？將自動產生付款傳票。" className="btn-secondary btn-sm">付款</ConfirmButton>}{" "}

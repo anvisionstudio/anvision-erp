@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { twd, date } from "@/lib/format";
 import { generatePayroll, savePayroll, payPayroll } from "@/app/actions/hr";
-import { PageHeader, Card, Empty, Badge, Stat } from "@/components/ui";
+import { PageHeader, Card, Empty, Badge, Stat, Chip } from "@/components/ui";
 import { ConfirmButton, SubmitButton } from "@/components/client";
 
 export default async function Payroll({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
@@ -17,10 +17,10 @@ export default async function Payroll({ searchParams }: { searchParams: Promise<
     <>
       <PageHeader title="薪資" sub={`${period} 月份`}
         actions={<>
-          <form className="flex gap-2"><input type="month" name="period" defaultValue={period} className="input" /><button className="btn-secondary">切換</button></form>
+          <form className="flex gap-2"><input type="month" aria-label="薪資月份" name="period" defaultValue={period} className="input" /><button className="btn-secondary">切換</button></form>
           <form action={generatePayroll}><input type="hidden" name="period" value={period} /><SubmitButton className="btn-primary">產生 {period} 薪資草稿</SubmitButton></form>
         </>} />
-      {periods.length > 0 && <div className="no-print mb-4 flex flex-wrap gap-2 text-xs">{periods.map((p) => <Link key={p.period} href={`/hr/payroll?period=${p.period}`} className={`rounded-full px-2 py-1 ${p.period === period ? "bg-brand-600 text-white" : "bg-slate-200 text-slate-600"}`}>{p.period}</Link>)}</div>}
+      {periods.length > 0 && <div className="no-print mb-4 flex flex-wrap gap-2 text-xs">{periods.map((p) => <Chip key={p.period} href={`/hr/payroll?period=${p.period}`} active={p.period === period}>{p.period}</Chip>)}</div>}
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <Stat label="應發合計" value={twd(sum("baseSalary") + sum("allowance"))} />
         <Stat label="代扣合計" value={twd(sum("deduction"))} />
@@ -32,16 +32,16 @@ export default async function Payroll({ searchParams }: { searchParams: Promise<
           <table className="tbl">
             <thead><tr><th>員工</th><th className="text-right">本薪</th><th className="text-right">加給 / 獎金</th><th className="text-right">代扣（勞健保等）</th><th className="text-right">實發</th><th>狀態</th><th /></tr></thead>
             <tbody>{rows.map((r) => r.status === "PAID" ? (
-              <tr key={r.id}><td>{r.employee.name}</td><td className="num">{twd(r.baseSalary)}</td><td className="num">{twd(r.allowance)}</td><td className="num">{twd(r.deduction)}</td><td className="num font-medium">{twd(r.netPay)}</td><td><Badge status="PAID" /><div className="text-xs text-slate-500">{date(r.paidDate)}</div></td><td /></tr>
+              <tr key={r.id}><td>{r.employee.name}</td><td className="num">{twd(r.baseSalary)}</td><td className="num">{twd(r.allowance)}</td><td className="num">{twd(r.deduction)}</td><td className="num font-medium">{twd(r.netPay)}</td><td><Badge status="PAID" /><div className="text-xs text-ink-muted">{date(r.paidDate)}</div></td><td /></tr>
             ) : (
               <tr key={r.id}>
                 <td>{r.employee.name}</td>
                 <td colSpan={4}>
                   <form action={savePayroll} className="grid grid-cols-4 items-center gap-2">
                     <input type="hidden" name="id" value={r.id} />
-                    <input name="baseSalary" type="number" defaultValue={r.baseSalary} className="input text-right" />
-                    <input name="allowance" type="number" defaultValue={r.allowance} className="input text-right" />
-                    <input name="deduction" type="number" defaultValue={r.deduction} className="input text-right" />
+                    <input name="baseSalary" type="number" inputMode="numeric" aria-label={`${r.employee.name} 本薪`} defaultValue={r.baseSalary} className="input min-w-[6rem] text-right" />
+                    <input name="allowance" type="number" inputMode="numeric" aria-label={`${r.employee.name} 加給 / 獎金`} defaultValue={r.allowance} className="input min-w-[6rem] text-right" />
+                    <input name="deduction" type="number" inputMode="numeric" aria-label={`${r.employee.name} 代扣`} defaultValue={r.deduction} className="input min-w-[6rem] text-right" />
                     <div className="flex items-center justify-end gap-2"><span className="tabular-nums font-medium">{twd(r.netPay)}</span><button className="btn-secondary btn-sm">更新</button></div>
                   </form>
                 </td>
@@ -52,7 +52,7 @@ export default async function Payroll({ searchParams }: { searchParams: Promise<
           </table>
         )}
       </Card>
-      <p className="mt-3 text-xs text-slate-400">代扣預設以月薪 × 3.6% 概估勞健保自付額，請依實際投保級距調整後再發放。</p>
+      <p className="mt-3 text-xs text-ink-muted">代扣預設以月薪 × 3.6% 概估勞健保自付額，請依實際投保級距調整後再發放。</p>
     </>
   );
 }

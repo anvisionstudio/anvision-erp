@@ -19,7 +19,7 @@ export default async function Leave() {
     <>
       <PageHeader title="請假" sub={user.employee ? `${year} 年特休：已用 ${num(myUsed, 1)} / ${num(user.employee.annualLeave, 1)} 天` : undefined} />
       <Card title="申請請假" className="mb-6">
-        {!isHR && !user.employee ? <p className="text-sm text-slate-500">您的帳號尚未連結員工資料，請聯絡管理員。</p> : (
+        {!isHR && !user.employee ? <p className="text-sm text-ink-muted">您的帳號尚未連結員工資料，請聯絡管理員。</p> : (
           <form action={requestLeave} className="grid gap-3 md:grid-cols-6">
             {isHR && <Field label="員工"><Select name="employeeId" required defaultValue={user.employee?.id} options={emps.map((e) => ({ value: e.id, label: e.name }))} /></Field>}
             <Field label="假別"><Select name="type" options={["特休", "病假", "事假", "公假", "婚假", "喪假", "其他"].map((v) => ({ value: v, label: v }))} /></Field>

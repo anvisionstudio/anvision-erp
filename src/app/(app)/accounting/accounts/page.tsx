@@ -27,7 +27,7 @@ export default async function Accounts() {
           <table className="tbl">
             <thead><tr><th className="w-24">代碼</th><th>名稱</th><th className="text-right">借方累計</th><th className="text-right">貸方累計</th><th className="text-right">餘額</th><th /></tr></thead>
             <tbody>{rows.filter((r) => r.type === t.value).map((a) => (
-              <tr key={a.id} className={a.active ? "" : "opacity-50"}>
+              <tr key={a.id} className={a.active ? "" : "bg-surface-muted text-ink-muted"}>
                 <td className="font-mono">{a.code}</td>
                 <td><Link className="link" href={`/accounting?account=${a.id}`}>{a.name}</Link>{!a.active && <Badge label="停用" />}</td>
                 <td className="num">{num(a.debit)}</td><td className="num">{num(a.credit)}</td><td className="num font-medium">{num(a.balance)}</td>

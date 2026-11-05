@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser, can } from "@/lib/auth";
@@ -25,7 +26,7 @@ export default async function QuoteDetail({ params }: { params: Promise<{ id: st
           {q.project ? (
             <Link href={`/projects/${q.project.id}`} className="btn-secondary">查看專案 {q.project.code}</Link>
           ) : q.status !== "REJECTED" && (
-            <ConfirmButton action={quoteToProject.bind(null, q.id)} message="將此報價標記成交並建立專案？" className="btn-primary">成交 → 建立專案</ConfirmButton>
+            <ConfirmButton action={quoteToProject.bind(null, q.id)} message="將此報價標記成交並建立專案？" className="btn-primary">成交並建立專案<ArrowRight className="h-4 w-4" aria-hidden /></ConfirmButton>
           )}
           {can(user, "finance") && q.status === "ACCEPTED" && (<>
             <ConfirmButton action={quoteToInvoice.bind(null, q.id, 0.5)} message="依報價建立 50% 訂金請款單？" className="btn-secondary">開 50% 訂金請款</ConfirmButton>

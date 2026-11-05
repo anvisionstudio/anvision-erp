@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { twd, date } from "@/lib/format";
 import { vendorLedger } from "@/lib/vendor-ledger";
-import { PageHeader, Card, Empty, Badge, Stat } from "@/components/ui";
+import { PageHeader, Card, Empty, Badge, Stat, Chip } from "@/components/ui";
 import { VendorForm } from "./form";
 import { VendorCsvForm } from "./csv";
 
@@ -29,11 +29,11 @@ export default async function Vendors({ searchParams }: { searchParams: Promise<
         <Stat label="預付儲值餘額" value={twd(prepaid)} />
       </div>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Link href="/vendors" className={`rounded-full px-3 py-1 text-xs ${!sp.cat ? "bg-brand-600 text-white" : "bg-slate-200 text-slate-600"}`}>全部</Link>
+        <Chip href="/vendors" active={!sp.cat}>全部</Chip>
         {categories.map((c) => (
-          <Link key={c} href={`/vendors?cat=${encodeURIComponent(c)}`} className={`rounded-full px-3 py-1 text-xs ${sp.cat === c ? "bg-brand-600 text-white" : "bg-slate-200 text-slate-600"}`}>{c}</Link>
+          <Chip key={c} href={`/vendors?cat=${encodeURIComponent(c)}`} active={sp.cat === c}>{c}</Chip>
         ))}
-        <form className="ml-auto"><input name="q" defaultValue={sp.q} placeholder="搜尋供應商…" className="input w-48" /></form>
+        <form className="w-full sm:ml-auto sm:w-auto"><input type="search" aria-label="搜尋供應商" name="q" defaultValue={sp.q} placeholder="搜尋供應商…" className="input w-full sm:w-48" /></form>
       </div>
       <Card pad={false} className="mb-6">
         {vendors.length === 0 ? <Empty>尚無供應商，可用下方「匯入 CSV」批次建立</Empty> : (
@@ -41,9 +41,9 @@ export default async function Vendors({ searchParams }: { searchParams: Promise<
             <thead><tr><th>名稱</th><th>類別</th><th>聯絡</th><th className="text-right">帳上成本 / 費用</th><th className="text-right">預付餘額</th><th className="text-right">筆數</th><th className="text-right">專案</th><th>最近交易</th><th className="text-right">ERP 未付</th></tr></thead>
             <tbody>{vendors.map(({ v, s, unpaid, erp }) => (
               <tr key={v.id}>
-                <td><Link href={`/vendors/${v.id}`} className="link">{v.name}</Link>{v.taxId && <div className="text-xs text-slate-400">統編 {v.taxId}</div>}</td>
+                <td><Link href={`/vendors/${v.id}`} className="link">{v.name}</Link>{v.taxId && <div className="text-xs text-ink-muted">統編 {v.taxId}</div>}</td>
                 <td>{v.category && <Badge label={v.category} />}</td>
-                <td className="text-xs text-slate-500">{v.contact}{v.phone && <div>{v.phone}</div>}</td>
+                <td className="text-xs text-ink-muted">{v.contact}{v.phone && <div>{v.phone}</div>}</td>
                 <td className="num font-medium">{twd(s.spend + erp)}</td>
                 <td className="num">{s.prepaid ? twd(s.prepaid) : "—"}</td>
                 <td className="num">{s.lines}</td>
@@ -56,7 +56,7 @@ export default async function Vendors({ searchParams }: { searchParams: Promise<
         )}
       </Card>
       <Card title="批次匯入 / 更新供應商（CSV）">
-        <p className="mb-3 text-sm text-slate-500">第一列為欄位名稱：名稱、類別、別名、統編、聯絡人、電話、Email、地址、匯款帳戶、備註（只有「名稱」必填）。同名供應商會更新，其餘新增。別名請用逗號或「、」分隔。</p>
+        <p className="mb-3 text-sm text-ink-muted">第一列為欄位名稱：名稱、類別、別名、統編、聯絡人、電話、Email、地址、匯款帳戶、備註（只有「名稱」必填）。同名供應商會更新，其餘新增。別名請用逗號或「、」分隔。</p>
         <VendorCsvForm />
       </Card>
     </>

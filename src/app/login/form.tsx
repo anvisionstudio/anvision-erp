@@ -15,7 +15,7 @@ export default function LoginForm() {
         <span className="label">密碼</span>
         <input name="password" type="password" required className="input" autoComplete="current-password" />
       </label>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
       <SubmitButton className="btn-primary w-full">登入</SubmitButton>
     </form>
   );

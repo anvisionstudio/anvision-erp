@@ -26,8 +26,8 @@ export default async function Employees({ searchParams }: { searchParams: Promis
             <Field label="職稱"><input name="title" defaultValue={e?.title ?? ""} className="input" /></Field>
             <Field label="部門"><input name="department" defaultValue={e?.department ?? ""} className="input" placeholder="設計 / 行銷 / 行政" /></Field>
             <Field label="到職日"><input type="date" name="hireDate" defaultValue={isoDate(e?.hireDate)} className="input" /></Field>
-            <Field label="Email"><input name="email" defaultValue={e?.email ?? ""} className="input" /></Field>
-            <Field label="電話"><input name="phone" defaultValue={e?.phone ?? ""} className="input" /></Field>
+            <Field label="Email"><input type="email" autoComplete="email" name="email" defaultValue={e?.email ?? ""} className="input" /></Field>
+            <Field label="電話"><input type="tel" inputMode="tel" autoComplete="tel" name="phone" defaultValue={e?.phone ?? ""} className="input" /></Field>
             <Field label="月薪"><input type="number" name="salary" defaultValue={e?.salary ?? 0} className="input" /></Field>
             <Field label="時薪成本（專案成本用）"><input type="number" name="hourlyCost" defaultValue={e?.hourlyCost ?? 0} className="input" /></Field>
             <Field label="年度特休天數"><input type="number" step="0.5" name="annualLeave" defaultValue={e?.annualLeave ?? 7} className="input" /></Field>
@@ -43,8 +43,8 @@ export default async function Employees({ searchParams }: { searchParams: Promis
             <thead><tr><th>姓名</th><th>職稱 / 部門</th><th>到職日</th><th>系統帳號</th><th className="text-right">月薪</th><th className="text-right">時薪成本</th><th className="text-right">特休（已用/總）</th><th>狀態</th><th /></tr></thead>
             <tbody>{emps.map((x) => (
               <tr key={x.id}>
-                <td className="font-medium">{x.name}</td><td>{x.title}<div className="text-xs text-slate-500">{x.department}</div></td>
-                <td>{date(x.hireDate)}</td><td className="text-xs">{x.user?.email ?? <span className="text-slate-400">—</span>}</td>
+                <td className="font-medium">{x.name}</td><td>{x.title}<div className="text-xs text-ink-muted">{x.department}</div></td>
+                <td>{date(x.hireDate)}</td><td className="text-xs">{x.user?.email ?? <span className="text-ink-muted">—</span>}</td>
                 <td className="num">{twd(x.salary)}</td><td className="num">{twd(x.hourlyCost)}</td>
                 <td className="num">{num(x.leaves.reduce((s, l) => s + l.days, 0), 1)} / {num(x.annualLeave, 1)}</td>
                 <td><Badge label={x.status === "ACTIVE" ? "在職" : "離職"} tone={x.status === "ACTIVE" ? "green" : "gray"} /></td>

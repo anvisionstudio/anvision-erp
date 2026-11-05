@@ -2,30 +2,92 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  body { @apply bg-slate-50 text-slate-800 antialiased; }
-  h1 { @apply text-xl font-semibold text-slate-900; }
-  h2 { @apply text-base font-semibold text-slate-900; }
+/* ── 語意化色彩 token（Minimalism & Swiss：深藍 / 灰，琥珀色強調）── */
+:root {
+  --primary: 30 64 175;        /* #1E40AF */
+  --primary-hover: 30 58 138;  /* #1E3A8A */
+  --primary-soft: 219 234 254; /* #DBEAFE */
+  --secondary: 59 130 246;     /* #3B82F6 */
+  --on-primary: 255 255 255;
+  --accent: 180 83 9;          /* #B45309（琥珀，深化以達 4.5:1） */
+  --accent-soft: 254 243 199;
+  --surface: 255 255 255;
+  --surface-muted: 248 250 252;/* #F8FAFC */
+  --ink: 15 23 42;             /* slate-900 */
+  --ink-muted: 71 85 105;      /* #475569 */
+  --ink-subtle: 100 116 139;   /* slate-500：僅用於 ≥14px 的次要文字 */
+  --line: 226 232 240;         /* slate-200 */
+  --nav: 23 37 84;             /* #172554 */
+  --nav-ink: 203 213 225;
+  --danger: 185 28 28;         /* #B91C1C */
+  --danger-soft: 254 226 226;
+  --success: 4 120 87;         /* #047857 */
+  --success-soft: 209 250 229;
 }
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body { @apply min-h-dvh bg-surface-muted font-sans text-base text-ink antialiased; line-height: 1.5; }
+  h1, h2, h3 { @apply font-heading tracking-tight text-ink; text-wrap: balance; }
+  h1 { @apply text-xl font-semibold; }
+  h2 { @apply text-base font-semibold; }
+  a, button, select, summary, [role="button"], input[type="file"], label:has(input[type="checkbox"]) { @apply cursor-pointer; }
+  button, a { touch-action: manipulation; }
+  /* 鍵盤焦點：清楚可見的 2px 外框 */
+  :focus-visible { @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-surface; }
+  input[type="file"] { @apply min-h-touch text-sm md:min-h-[2.375rem]; }
+  input[type="file"]::file-selector-button { @apply min-h-touch cursor-pointer md:min-h-[2.375rem]; }
+  ::selection { @apply bg-primary-soft; }
+}
+
 @layer components {
-  .input { @apply w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:bg-slate-100; }
-  .label { @apply mb-1 block text-xs font-medium text-slate-600; }
-  .btn { @apply inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition disabled:opacity-50; }
-  .btn-primary { @apply btn bg-brand-600 text-white hover:bg-brand-700; }
-  .btn-secondary { @apply btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50; }
-  .btn-danger { @apply btn border border-red-200 bg-white text-red-600 hover:bg-red-50; }
-  .btn-sm { @apply px-2 py-1 text-xs; }
-  .card { @apply rounded-lg border border-slate-200 bg-white shadow-sm; }
+  /* 表單：手機 16px（避免 iOS 自動放大）、觸控高度 ≥44px；桌面 14px 較緊湊 */
+  .input {
+    @apply block min-h-touch w-full rounded-md border border-line bg-surface px-3 py-2 text-base text-ink shadow-sm transition-colors duration-200
+      placeholder:text-ink-subtle hover:border-ink-subtle/60
+      focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25
+      disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-muted
+      read-only:bg-surface-muted
+      md:min-h-[2.375rem] md:text-sm;
+  }
+  select.input { @apply pr-8; }
+  textarea.input { @apply min-h-[5rem]; }
+  .label { @apply mb-1.5 block text-sm font-medium text-ink-muted; }
+  .help { @apply mt-1 block text-xs text-ink-muted; }
+
+  .btn {
+    @apply inline-flex min-h-touch select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium
+      transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50 md:min-h-[2.375rem];
+  }
+  .btn-primary { @apply btn bg-primary text-primary-on hover:bg-primary-hover active:bg-primary-hover; }
+  .btn-secondary { @apply btn border border-line bg-surface text-ink hover:bg-surface-muted active:bg-line/60; }
+  .btn-danger { @apply btn border border-danger/30 bg-surface text-danger hover:bg-danger-soft; }
+  .btn-sm { @apply min-h-touch px-3 py-1 text-xs md:min-h-[2rem]; }
+  .btn-icon { @apply btn min-h-touch min-w-[2.75rem] px-2 md:min-h-[2rem] md:min-w-[2rem]; }
+
+  .card { @apply rounded-lg border border-line bg-surface shadow-sm; }
+
+  /* 資料表：容器內水平捲動，不造成整頁橫向捲動 */
   .tbl { @apply w-full text-sm; }
-  .tbl th { @apply border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500; }
+  .tbl th { @apply whitespace-nowrap border-b border-line bg-surface-muted px-3 py-2.5 text-xs font-medium text-ink-muted; }
   .tbl th:not(.text-right) { text-align: left; }
   .tbl th.text-right { text-align: right; }
-  .tbl td { @apply border-b border-slate-100 px-3 py-2 align-middle; }
+  .tbl td { @apply border-b border-line/70 px-3 py-2.5 align-middle; }
   .tbl tr:last-child td { @apply border-b-0; }
-  .tbl tbody tr:hover { @apply bg-slate-50/70; }
-  .link { @apply font-medium text-brand-600 hover:underline; }
-  .num { @apply text-right tabular-nums; }
+  .tbl tbody tr { @apply transition-colors duration-150; }
+  .tbl tbody tr:hover { @apply bg-surface-muted; }
+
+  .link { @apply rounded-sm font-medium text-primary underline-offset-2 hover:underline; overflow-wrap: anywhere; }
+  /* 獨立連結（卡片標題列、按鈕列中的連結）至少 24px 高 */
+  :is(.flex, .grid) > .link { display: inline-flex; align-items: center; min-height: 1.5rem; }
+  /* 數字欄：等寬數字避免跳動 */
+  .num { @apply whitespace-nowrap text-right font-mono tabular-nums; }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
 @media print {
   .no-print { display: none !important; }
   body { background: white; }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowRight, ChevronLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser, can } from "@/lib/auth";
@@ -57,23 +58,23 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
 
       {tab === "tasks" && (
         <div className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {FLOW.map((s) => (
-              <div key={s} className="rounded-lg bg-slate-100/70 p-2">
-                <div className="mb-2 flex items-center justify-between px-1"><Badge status={s} /><span className="text-xs text-slate-500">{p.tasks.filter((t) => t.status === s).length}</span></div>
+              <div key={s} className="rounded-lg bg-surface-muted p-2">
+                <div className="mb-2 flex items-center justify-between px-1"><Badge status={s} /><span className="text-xs text-ink-muted">{p.tasks.filter((t) => t.status === s).length}</span></div>
                 <div className="space-y-2">
                   {p.tasks.filter((t) => t.status === s).map((t) => {
                     const i = FLOW.indexOf(s);
                     return (
                       <div key={t.id} className="card p-3 text-sm">
                         <div className="font-medium">{t.title}</div>
-                        <div className="mt-1 flex justify-between text-xs text-slate-500">
+                        <div className="mt-1 flex justify-between text-xs text-ink-muted">
                           <span>{t.assignee?.name ?? "未指派"}</span>
-                          <span className={t.dueDate && t.dueDate < new Date() && s !== "DONE" ? "text-red-600" : ""}>{t.dueDate ? date(t.dueDate) : ""}</span>
+                          <span className={t.dueDate && t.dueDate < new Date() && s !== "DONE" ? "text-danger" : ""}>{t.dueDate ? date(t.dueDate) : ""}</span>
                         </div>
                         <div className="mt-2 flex gap-1">
-                          {i > 0 && <ConfirmButton action={setTaskStatus.bind(null, t.id, FLOW[i - 1])} message="移回上一階段？" className="btn-secondary btn-sm">←</ConfirmButton>}
-                          {i < FLOW.length - 1 && <ConfirmButton action={setTaskStatus.bind(null, t.id, FLOW[i + 1])} message={`移到「${FLOW[i + 1]}」？`} className="btn-secondary btn-sm flex-1">下一步 →</ConfirmButton>}
+                          {i > 0 && <ConfirmButton action={setTaskStatus.bind(null, t.id, FLOW[i - 1])} message="移回上一階段？" className="btn-secondary btn-sm" label="移回上一階段"><ChevronLeft className="h-4 w-4" aria-hidden /></ConfirmButton>}
+                          {i < FLOW.length - 1 && <ConfirmButton action={setTaskStatus.bind(null, t.id, FLOW[i + 1])} message={`移到「${FLOW[i + 1]}」？`} className="btn-secondary btn-sm flex-1">下一步<ArrowRight className="h-3.5 w-3.5" aria-hidden /></ConfirmButton>}
                           {user.role !== "STAFF" && <ConfirmButton action={deleteTask.bind(null, t.id)} message="刪除此任務？">✕</ConfirmButton>}
                         </div>
                       </div>
@@ -123,11 +124,11 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
           <Card title="損益試算">
             <dl className="space-y-2 text-sm">
               {[["合約金額（未稅）", p.budget], [profit.fromLedger ? "帳上收入" : "已請款（未稅）", profit.invoiced], [profit.fromLedger ? "帳上成本" : "直接費用 / 外包", -profit.expenses], [`人工成本（${num(profit.hours, 1)}h）`, -profit.labor]].map(([k, v]) => (
-                <div key={k as string} className="flex justify-between"><dt className="text-slate-500">{k}</dt><dd className="tabular-nums">{twd(v as number)}</dd></div>
+                <div key={k as string} className="flex justify-between"><dt className="text-ink-muted">{k}</dt><dd className="tabular-nums">{twd(v as number)}</dd></div>
               ))}
-              <div className="flex justify-between border-t pt-2 font-semibold"><dt>毛利</dt><dd className={profit.profit >= 0 ? "text-emerald-600" : "text-red-600"}>{twd(profit.profit)}</dd></div>
+              <div className="flex justify-between border-t pt-2 font-semibold"><dt>毛利</dt><dd className={profit.profit >= 0 ? "text-success" : "text-danger"}>{twd(profit.profit)}</dd></div>
             </dl>
-            <p className="mt-3 text-xs text-slate-400">{profit.fromLedger ? `收入與直接成本取自 Excel 日記簿（專案：${p.ref}）。` : ""}人工成本 = 工時 × 員工資料中設定的「時薪成本」</p>
+            <p className="mt-3 text-xs text-ink-muted">{profit.fromLedger ? `收入與直接成本取自 Excel 日記簿（專案：${p.ref}）。` : ""}人工成本 = 工時 × 員工資料中設定的「時薪成本」</p>
           </Card>
           <Card title="請款單" className="lg:col-span-2" pad={false} actions={<Link href={`/invoices/new?projectId=${p.id}`} className="btn-primary btn-sm">＋ 請款</Link>}>
             {p.invoices.length === 0 ? <Empty /> : <table className="tbl"><tbody>{p.invoices.map((i) => (

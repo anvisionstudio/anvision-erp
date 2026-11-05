@@ -13,7 +13,7 @@ export default async function Audit() {
           <table className="tbl">
             <thead><tr><th>時間</th><th>使用者</th><th>動作</th><th>對象</th><th>內容</th></tr></thead>
             <tbody>{logs.map((l) => (
-              <tr key={l.id}><td className="whitespace-nowrap text-xs">{l.createdAt.toLocaleString("zh-TW", { hour12: false })}</td><td>{l.user?.name ?? "系統"}</td><td>{l.action}</td><td>{l.entity}</td><td className="text-xs text-slate-500">{l.detail}</td></tr>
+              <tr key={l.id}><td className="whitespace-nowrap text-xs">{l.createdAt.toLocaleString("zh-TW", { hour12: false })}</td><td>{l.user?.name ?? "系統"}</td><td>{l.action}</td><td>{l.entity}</td><td className="text-xs text-ink-muted">{l.detail}</td></tr>
             ))}</tbody>
           </table>
         )}

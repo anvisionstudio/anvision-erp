@@ -1,27 +1,36 @@
 "use client";
-import { useMemo, useState, useTransition, type ReactNode } from "react";
+import { useId, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
+import { Loader2, Plus, Printer, Trash2 } from "lucide-react";
+
+function Spinner() {
+  return <Loader2 className="h-4 w-4 animate-spin" aria-hidden />;
+}
 
 export function SubmitButton({ children, className = "btn-primary" }: { children: ReactNode; className?: string }) {
   const { pending } = useFormStatus();
   return (
-    <button type="submit" className={className} disabled={pending}>
-      {pending ? "處理中…" : children}
+    <button type="submit" className={className} disabled={pending} aria-busy={pending}>
+      {pending ? <><Spinner />處理中…</> : children}
     </button>
   );
 }
 
-/** 需要確認的動作按鈕（刪除、作廢等） */
-export function ConfirmButton({ action, children, message = "確定要執行嗎？", className = "btn-danger btn-sm" }: { action: () => Promise<void>; children: ReactNode; message?: string; className?: string }) {
+/** 需要確認的動作按鈕（刪除、作廢等）。內容為「✕」時顯示垃圾桶圖示並附無障礙名稱 */
+export function ConfirmButton({ action, children, message = "確定要執行嗎？", className = "btn-danger btn-sm", label }: { action: () => Promise<void>; children: ReactNode; message?: string; className?: string; label?: string }) {
   const [pending, start] = useTransition();
+  const iconOnly = children === "✕";
   return (
     <button
       type="button"
-      className={className}
+      className={iconOnly ? `${className} btn-icon` : className}
       disabled={pending}
+      aria-busy={pending}
+      aria-label={iconOnly ? label ?? "刪除" : label}
+      title={iconOnly ? label ?? "刪除" : undefined}
       onClick={() => confirm(message) && start(() => action())}
     >
-      {pending ? "…" : children}
+      {pending ? <Spinner /> : iconOnly ? <Trash2 className="h-4 w-4" aria-hidden /> : children}
     </button>
   );
 }
@@ -29,14 +38,18 @@ export function ConfirmButton({ action, children, message = "確定要執行嗎�
 export function PrintButton() {
   return (
     <button type="button" className="btn-secondary" onClick={() => window.print()}>
-      列印 / PDF
+      <Printer className="h-4 w-4" aria-hidden />列印 / PDF
     </button>
   );
 }
 
 type Item = { description: string; quantity: number; unitPrice: number; itemId?: string | null };
+const fmt = (n: number) => "NT$ " + Math.round(n).toLocaleString("zh-TW");
 
-/** 報價單 / 請款單 / 採購單共用的行項目編輯器 */
+/**
+ * 報價單 / 請款單 / 採購單共用的行項目編輯器。
+ * 手機：每個項目一張卡片（欄位上下排列、標籤可見）；桌面：表格式欄位排列。
+ */
 export function LineItems({
   initial,
   initialTaxRate = 0.05,
@@ -46,6 +59,7 @@ export function LineItems({
   initialTaxRate?: number;
   catalog?: { id: string; label: string; cost: number }[];
 }) {
+  const uid = useId();
   const [items, setItems] = useState<Item[]>(initial?.length ? initial : [{ description: "", quantity: 1, unitPrice: 0 }]);
   const [taxRate, setTaxRate] = useState(initialTaxRate);
   const t = useMemo(() => {
@@ -54,88 +68,84 @@ export function LineItems({
     return { subtotal, tax, total: subtotal + tax };
   }, [items, taxRate]);
   const set = (idx: number, patch: Partial<Item>) => setItems((xs) => xs.map((x, i) => (i === idx ? { ...x, ...patch } : x)));
-  const fmt = (n: number) => "NT$ " + n.toLocaleString("zh-TW");
+  const cols = catalog ? "md:grid-cols-[12rem_minmax(0,1fr)_6rem_8rem_8rem_2.5rem]" : "md:grid-cols-[minmax(0,1fr)_6rem_8rem_8rem_2.5rem]";
+  const lbl = "label md:sr-only";
 
   return (
-    <div>
+    <fieldset>
+      <legend className="sr-only">項目明細</legend>
       <input type="hidden" name="items" value={JSON.stringify(items)} />
       <input type="hidden" name="taxRate" value={taxRate} />
-      <div className="overflow-x-auto">
-        <table className="tbl">
-          <thead>
-            <tr>
-              {catalog && <th className="w-48">庫存品項</th>}
-              <th>項目說明</th>
-              <th className="w-24 text-right">數量</th>
-              <th className="w-32 text-right">單價</th>
-              <th className="w-32 text-right">金額</th>
-              <th className="w-10" />
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((it, idx) => (
-              <tr key={idx}>
-                {catalog && (
-                  <td>
-                    <select
-                      className="input"
-                      value={it.itemId ?? ""}
-                      onChange={(e) => {
-                        const c = catalog.find((x) => x.id === e.target.value);
-                        set(idx, { itemId: e.target.value || null, ...(c ? { description: c.label, unitPrice: c.cost } : {}) });
-                      }}
-                    >
-                      <option value="">（非庫存）</option>
-                      {catalog.map((c) => (
-                        <option key={c.id} value={c.id}>{c.label}</option>
-                      ))}
-                    </select>
-                  </td>
-                )}
-                <td>
-                  <input className="input" value={it.description} placeholder="例如：品牌識別設計" onChange={(e) => set(idx, { description: e.target.value })} />
-                </td>
-                <td>
-                  <input className="input text-right" type="number" step="any" value={it.quantity} onChange={(e) => set(idx, { quantity: Number(e.target.value) })} />
-                </td>
-                <td>
-                  <input className="input text-right" type="number" step="any" value={it.unitPrice} onChange={(e) => set(idx, { unitPrice: Number(e.target.value) })} />
-                </td>
-                <td className="num">{fmt(Math.round((it.quantity || 0) * (it.unitPrice || 0)))}</td>
-                <td>
-                  <button type="button" className="text-slate-400 hover:text-red-600" onClick={() => setItems((xs) => xs.filter((_, i) => i !== idx))} aria-label="刪除">
-                    ✕
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className={`hidden gap-3 border-b border-line pb-2 text-xs font-medium text-ink-muted md:grid ${cols}`} aria-hidden>
+        {catalog && <span>庫存品項</span>}<span>項目說明</span><span className="text-right">數量</span><span className="text-right">單價</span><span className="text-right">金額</span><span />
       </div>
-      <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
-        <button type="button" className="btn-secondary btn-sm" onClick={() => setItems((xs) => [...xs, { description: "", quantity: 1, unitPrice: 0 }])}>
-          ＋ 新增項目
+      <ol className="space-y-3 md:space-y-0">
+        {items.map((it, idx) => (
+          <li key={idx} className={`grid grid-cols-2 gap-3 rounded-lg border border-line p-3 md:items-center md:rounded-none md:border-0 md:border-b md:px-0 md:py-2 ${cols}`}>
+            {catalog && (
+              <label className="col-span-2 md:col-span-1">
+                <span className={lbl}>庫存品項</span>
+                <select
+                  className="input"
+                  value={it.itemId ?? ""}
+                  onChange={(e) => {
+                    const c = catalog.find((x) => x.id === e.target.value);
+                    set(idx, { itemId: e.target.value || null, ...(c ? { description: c.label, unitPrice: c.cost } : {}) });
+                  }}
+                >
+                  <option value="">（非庫存）</option>
+                  {catalog.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
+              </label>
+            )}
+            <label className="col-span-2 md:col-span-1">
+              <span className={lbl}>項目說明 {idx + 1}</span>
+              <input className="input" value={it.description} placeholder="例如：品牌識別設計" onChange={(e) => set(idx, { description: e.target.value })} aria-label={`項目 ${idx + 1} 說明`} />
+            </label>
+            <label>
+              <span className={lbl}>數量</span>
+              <input className="input text-right" type="number" inputMode="decimal" step="any" value={it.quantity} onChange={(e) => set(idx, { quantity: Number(e.target.value) })} aria-label={`項目 ${idx + 1} 數量`} />
+            </label>
+            <label>
+              <span className={lbl}>單價</span>
+              <input className="input text-right" type="number" inputMode="decimal" step="any" value={it.unitPrice} onChange={(e) => set(idx, { unitPrice: Number(e.target.value) })} aria-label={`項目 ${idx + 1} 單價`} />
+            </label>
+            <div className="flex items-center justify-between md:justify-end">
+              <span className="text-sm text-ink-muted md:sr-only">金額</span>
+              <span className="num font-medium">{fmt((it.quantity || 0) * (it.unitPrice || 0))}</span>
+            </div>
+            <div className="flex justify-end">
+              <button type="button" className="btn-icon btn-secondary text-ink-muted hover:text-danger" onClick={() => setItems((xs) => xs.filter((_, i) => i !== idx))} aria-label={`刪除項目 ${idx + 1}`} title="刪除項目">
+                <Trash2 className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <button type="button" className="btn-secondary self-start" onClick={() => setItems((xs) => [...xs, { description: "", quantity: 1, unitPrice: 0 }])}>
+          <Plus className="h-4 w-4" aria-hidden />新增項目
         </button>
-        <div className="w-64 space-y-1 text-sm">
-          <div className="flex justify-between"><span className="text-slate-500">小計（未稅）</span><span className="tabular-nums">{fmt(t.subtotal)}</span></div>
-          <div className="flex items-center justify-between">
-            <span className="text-slate-500">
-              營業稅
-              <select className="ml-2 rounded border border-slate-300 px-1 py-0.5 text-xs" value={taxRate} onChange={(e) => setTaxRate(Number(e.target.value))}>
+        <dl className="w-full space-y-1.5 text-sm sm:w-72">
+          <div className="flex justify-between"><dt className="text-ink-muted">小計（未稅）</dt><dd className="num">{fmt(t.subtotal)}</dd></div>
+          <div className="flex items-center justify-between gap-2">
+            <dt className="flex items-center gap-2 text-ink-muted">
+              <label htmlFor={`${uid}-tax`}>營業稅</label>
+              <select id={`${uid}-tax`} className="input w-auto py-1" value={taxRate} onChange={(e) => setTaxRate(Number(e.target.value))}>
                 <option value={0.05}>5%</option>
                 <option value={0}>免稅 / 0%</option>
               </select>
-            </span>
-            <span className="tabular-nums">{fmt(t.tax)}</span>
+            </dt>
+            <dd className="num">{fmt(t.tax)}</dd>
           </div>
-          <div className="flex justify-between border-t border-slate-200 pt-1 font-semibold"><span>總計</span><span className="tabular-nums">{fmt(t.total)}</span></div>
-        </div>
+          <div className="flex justify-between border-t border-line pt-2 text-base font-semibold"><dt>總計</dt><dd className="num">{fmt(t.total)}</dd></div>
+        </dl>
       </div>
-    </div>
+    </fieldset>
   );
 }
 
-/** 手動傳票分錄編輯器 */
+/** 手動傳票分錄編輯器（手機為卡片，桌面為表格式排列） */
 export function JournalLines({ accounts }: { accounts: { id: string; label: string }[] }) {
   const blank = { accountId: "", debit: 0, credit: 0, memo: "" };
   const [lines, setLines] = useState([{ ...blank }, { ...blank }]);
@@ -143,35 +153,44 @@ export function JournalLines({ accounts }: { accounts: { id: string; label: stri
   const cr = lines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
   const balanced = Math.abs(dr - cr) < 0.005 && dr > 0;
   const set = (i: number, p: Partial<typeof blank>) => setLines((xs) => xs.map((x, j) => (j === i ? { ...x, ...p } : x)));
+  const cols = "md:grid-cols-[minmax(0,1.4fr)_8rem_8rem_minmax(0,1fr)_2.5rem]";
+  const lbl = "label md:sr-only";
   return (
-    <div>
+    <fieldset>
+      <legend className="sr-only">傳票分錄</legend>
       <input type="hidden" name="lines" value={JSON.stringify(lines)} />
-      <table className="tbl">
-        <thead><tr><th>會計科目</th><th className="w-32 text-right">借方</th><th className="w-32 text-right">貸方</th><th>摘要</th><th className="w-8" /></tr></thead>
-        <tbody>
-          {lines.map((l, i) => (
-            <tr key={i}>
-              <td>
-                <select className="input" value={l.accountId} onChange={(e) => set(i, { accountId: e.target.value })}>
-                  <option value="">選擇科目</option>
-                  {accounts.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
-                </select>
-              </td>
-              <td><input className="input text-right" type="number" step="any" value={l.debit} onChange={(e) => set(i, { debit: Number(e.target.value) })} /></td>
-              <td><input className="input text-right" type="number" step="any" value={l.credit} onChange={(e) => set(i, { credit: Number(e.target.value) })} /></td>
-              <td><input className="input" value={l.memo} onChange={(e) => set(i, { memo: e.target.value })} /></td>
-              <td><button type="button" className="text-slate-400 hover:text-red-600" onClick={() => setLines((xs) => xs.filter((_, j) => j !== i))}>✕</button></td>
-            </tr>
-          ))}
-          <tr className="font-medium">
-            <td className="text-right text-slate-500">合計</td>
-            <td className="num">{dr.toLocaleString()}</td>
-            <td className="num">{cr.toLocaleString()}</td>
-            <td colSpan={2} className={balanced ? "text-emerald-600" : "text-red-600"}>{balanced ? "✓ 借貸平衡" : "借貸尚未平衡"}</td>
-          </tr>
-        </tbody>
-      </table>
-      <button type="button" className="btn-secondary btn-sm mt-2" onClick={() => setLines((xs) => [...xs, { ...blank }])}>＋ 新增分錄</button>
-    </div>
+      <div className={`hidden gap-3 border-b border-line pb-2 text-xs font-medium text-ink-muted md:grid ${cols}`} aria-hidden>
+        <span>會計科目</span><span className="text-right">借方</span><span className="text-right">貸方</span><span>摘要</span><span />
+      </div>
+      <ol className="space-y-3 md:space-y-0">
+        {lines.map((l, i) => (
+          <li key={i} className={`grid grid-cols-2 gap-3 rounded-lg border border-line p-3 md:items-center md:rounded-none md:border-0 md:border-b md:px-0 md:py-2 ${cols}`}>
+            <label className="col-span-2 md:col-span-1">
+              <span className={lbl}>會計科目（第 {i + 1} 行）</span>
+              <select className="input" value={l.accountId} onChange={(e) => set(i, { accountId: e.target.value })} aria-label={`第 ${i + 1} 行會計科目`}>
+                <option value="">選擇科目</option>
+                {accounts.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+              </select>
+            </label>
+            <label><span className={lbl}>借方</span><input className="input text-right" type="number" inputMode="decimal" step="any" value={l.debit} onChange={(e) => set(i, { debit: Number(e.target.value) })} aria-label={`第 ${i + 1} 行借方`} /></label>
+            <label><span className={lbl}>貸方</span><input className="input text-right" type="number" inputMode="decimal" step="any" value={l.credit} onChange={(e) => set(i, { credit: Number(e.target.value) })} aria-label={`第 ${i + 1} 行貸方`} /></label>
+            <label className="col-span-2 md:col-span-1"><span className={lbl}>摘要</span><input className="input" value={l.memo} onChange={(e) => set(i, { memo: e.target.value })} aria-label={`第 ${i + 1} 行摘要`} /></label>
+            <div className="col-span-2 flex justify-end md:col-span-1">
+              <button type="button" className="btn-icon btn-secondary text-ink-muted hover:text-danger" onClick={() => setLines((xs) => xs.filter((_, j) => j !== i))} aria-label={`刪除第 ${i + 1} 行`} title="刪除分錄">
+                <Trash2 className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <button type="button" className="btn-secondary self-start" onClick={() => setLines((xs) => [...xs, { ...blank }])}><Plus className="h-4 w-4" aria-hidden />新增分錄</button>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+          <span>借 <span className="num">{dr.toLocaleString()}</span></span>
+          <span>貸 <span className="num">{cr.toLocaleString()}</span></span>
+          <span role="status" className={`font-medium ${balanced ? "text-success" : "text-danger"}`}>{balanced ? "借貸平衡" : "借貸尚未平衡"}</span>
+        </div>
+      </div>
+    </fieldset>
   );
 }
