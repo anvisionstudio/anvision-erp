@@ -12,6 +12,7 @@ import ExcelJS from "exceljs";
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { DEFAULT_ACCOUNTS, ACC_DEFAULT_CODE, type AccKey } from "./ledger";
+import { assignClients, IMPORT_CLIENT } from "./client-match";
 
 type Cell = ExcelJS.CellValue;
 
@@ -184,7 +185,7 @@ const ROLE_ALIASES: Record<AccKey, string[]> = {
   MISC: ["其他費用", "雜費", "雜項購置"],
 };
 
-export const IMPORT_CLIENT = "Excel 匯入客戶（待整理）";
+export { IMPORT_CLIENT };
 
 export async function applyImport(book: ParsedBook, userId: string | null) {
   const started = Date.now();
@@ -272,6 +273,7 @@ export async function applyImport(book: ParsedBook, userId: string | null) {
       for (const p of book.projects) {
         if (!p.guis.length) continue;
         const projectId = projIdByRef.get(p.ref)!;
+        const projClient = (await tx.project.findUnique({ where: { id: projectId }, select: { clientId: true } }))?.clientId;
         const issueDate = p.invoiceDate ?? p.quoteDate ?? dateFromRef(p.ref) ?? new Date();
         const single = p.guis.length === 1;
         for (const gui of p.guis) {
@@ -292,7 +294,7 @@ export async function applyImport(book: ParsedBook, userId: string | null) {
           const status = paid <= 0 ? "ISSUED" : paid + 50 >= total ? "PAID" : "PARTIAL";
           await tx.invoice.create({
             data: {
-              number: gui, gui, imported: true, clientId: client.id, projectId, status, issueDate,
+              number: gui, gui, imported: true, clientId: projClient ?? client.id, projectId, status, issueDate,
               dueDate: new Date(issueDate.getTime() + 30 * 864e5), taxRate: 0.05,
               notes: [`由 Excel 專案清單匯入（${p.ref}）`, p.note].filter(Boolean).join("\n"),
               items: { create: lines },
@@ -302,6 +304,9 @@ export async function applyImport(book: ParsedBook, userId: string | null) {
           invCount++;
         }
       }
+
+      // 依客戶別名把專案與請款單歸給客戶
+      const assigned = await assignClients(tx);
 
       await tx.setting.upsert({ where: { key: "import.vat" }, create: { key: "import.vat", value: JSON.stringify(book.vat) }, update: { value: JSON.stringify(book.vat) } });
 
@@ -315,6 +320,7 @@ export async function applyImport(book: ParsedBook, userId: string | null) {
         projectsCreated: projCreated,
         projectsUpdated: projUpdated,
         invoices: invCount,
+        clientsAssigned: assigned.projects,
         unbalanced: book.unbalanced,
         warnings: book.warnings.slice(0, 50),
         seconds: 0,

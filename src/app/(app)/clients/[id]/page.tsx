@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { twd, date, totals } from "@/lib/format";
 import { deleteClient } from "@/app/actions/sales";
-import { PageHeader, Card, Badge, Empty } from "@/components/ui";
+import { PageHeader, Card, Badge, Empty, Stat } from "@/components/ui";
+import { clientStats } from "@/lib/client-stats";
 import { ConfirmButton } from "@/components/client";
 import { ClientForm } from "../form";
 
@@ -21,6 +22,7 @@ export default async function ClientDetail({ params }: { params: Promise<{ id: s
   });
   if (!c) notFound();
   const del = deleteClient.bind(null, c.id);
+  const st = (await clientStats()).get(c.id) ?? { projects: 0, revenue: 0, outstanding: 0, last: null };
   return (
     <>
       <PageHeader title={c.name} sub={c.taxId ? `統編 ${c.taxId}` : undefined} back="/clients"
@@ -28,6 +30,12 @@ export default async function ClientDetail({ params }: { params: Promise<{ id: s
           <Link href={`/quotes/new?clientId=${c.id}`} className="btn-primary">＋ 建立報價</Link>
           <ConfirmButton action={del} message="確定刪除此客戶？" className="btn-danger">刪除</ConfirmButton>
         </>} />
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Stat label="專案" value={st.projects} />
+        <Stat label="帳上營收" value={twd(st.revenue)} />
+        <Stat label="未收款" value={twd(st.outstanding)} tone={st.outstanding ? "bad" : undefined} />
+        <Stat label="最近專案" value={<span className="text-lg">{date(st.last)}</span>} />
+      </div>
       <div className="grid gap-6 lg:grid-cols-3">
         <Card title="基本資料" className="lg:col-span-2"><ClientForm c={c} /></Card>
         <div className="space-y-6">

@@ -6,6 +6,8 @@ import { requireUser, audit } from "@/lib/auth";
 import { str, req, n, dt, items } from "@/lib/form";
 import { nextNumber } from "@/lib/seq";
 import { totals } from "@/lib/format";
+import { parseCsv } from "@/lib/csv";
+import { assignClients } from "@/lib/client-match";
 
 // ── 客戶 ──
 export async function saveClient(f: FormData) {
@@ -13,9 +15,10 @@ export async function saveClient(f: FormData) {
   const id = str(f, "id");
   const data = {
     name: req(f, "name"), taxId: str(f, "taxId"), contact: str(f, "contact"), email: str(f, "email"),
-    phone: str(f, "phone"), address: str(f, "address"), notes: str(f, "notes"),
+    phone: str(f, "phone"), address: str(f, "address"), notes: str(f, "notes"), aliases: str(f, "aliases"),
   };
   const c = id ? await db.client.update({ where: { id }, data }) : await db.client.create({ data });
+  await db.$transaction((tx) => assignClients(tx), { timeout: 60_000 });
   await audit(u.id, id ? "更新" : "新增", "客戶", c.id, c.name);
   revalidatePath("/clients");
   redirect(`/clients/${c.id}`);
@@ -101,4 +104,44 @@ export async function quoteToInvoice(id: string, ratio: number) {
   );
   await audit(u.id, "報價轉請款", "請款單", inv.id, `${q.number} → ${inv.number}`);
   redirect(`/invoices/${inv.id}`);
+}
+
+export type ClientCsvState = { ok?: string; error?: string } | null;
+
+/** 以 CSV 批次匯入客戶（依名稱新增或更新），並依別名把專案歸給客戶 */
+export async function importClientsCsv(_: ClientCsvState, f: FormData): Promise<ClientCsvState> {
+  try {
+    const u = await requireUser("sales");
+    const file = f.get("file");
+    if (!(file instanceof File) || !file.size) return { error: "請選擇 CSV 檔案" };
+    const rows = parseCsv(await file.text());
+    if (rows.length < 2) return { error: "CSV 沒有資料列" };
+    const head = rows[0].map((h) => h.trim());
+    const col = (...names: string[]) => head.findIndex((h) => names.includes(h));
+    const ix = {
+      name: col("名稱", "客戶", "name"), aliases: col("別名", "aliases"), taxId: col("統編", "統一編號", "taxId"),
+      contact: col("聯絡人", "contact"), phone: col("電話", "phone"), email: col("Email", "email", "信箱"),
+      address: col("地址", "address"), notes: col("備註", "notes"),
+    };
+    if (ix.name < 0) return { error: "CSV 第一列需包含「名稱」欄位" };
+    let created = 0, updated = 0;
+    for (const r of rows.slice(1)) {
+      const get = (i: number) => (i >= 0 ? r[i]?.trim() || null : null);
+      const name = get(ix.name);
+      if (!name) continue;
+      const data: Record<string, string | null> = {};
+      for (const k of ["aliases", "taxId", "contact", "phone", "email", "address", "notes"] as const) if (ix[k] >= 0) data[k] = get(ix[k]);
+      const exists = await db.client.findFirst({ where: { name } });
+      if (exists) { await db.client.update({ where: { id: exists.id }, data }); updated++; }
+      else { await db.client.create({ data: { name, ...data } }); created++; }
+    }
+    const a = await db.$transaction((tx) => assignClients(tx), { timeout: 120_000 });
+    await audit(u.id, "CSV 匯入", "客戶", undefined, `新增 ${created}・更新 ${updated}・歸戶專案 ${a.projects}`);
+    revalidatePath("/clients");
+    revalidatePath("/projects");
+    revalidatePath("/invoices");
+    return { ok: `匯入完成：新增 ${created} 位、更新 ${updated} 位客戶，並把 ${a.projects} 個專案、${a.invoices} 張請款單歸到對應客戶` };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
 }

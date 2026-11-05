@@ -62,6 +62,7 @@ model Sequence {
 model Client {
   id        String    @id @default(cuid())
   name      String
+  aliases   String?   // 專案名稱中的別名，以逗號分隔（同步時自動把專案歸給此客戶）
   taxId     String?   // 統一編號
   contact   String?
   email     String?

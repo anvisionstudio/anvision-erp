@@ -6,12 +6,13 @@ import { PageHeader, Card, Badge, Empty, Tabs } from "@/components/ui";
 
 const TABS = [["OPEN", "進行中"], ["DONE", "已完成"], ["ALL", "全部"]];
 
-export default async function Projects({ searchParams }: { searchParams: Promise<{ status?: string; q?: string }> }) {
+export default async function Projects({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; noclient?: string }> }) {
   const user = await requireUser("projects");
-  const { status = "OPEN", q } = await searchParams;
+  const { status = "OPEN", q, noclient } = await searchParams;
   const where = {
     ...(status === "OPEN" ? { status: { in: ["PLANNING", "ACTIVE", "ON_HOLD"] } } : status === "DONE" ? { status: { in: ["DONE", "CANCELLED"] } } : {}),
     ...(q ? { OR: [{ name: { contains: q } }, { code: { contains: q } }] } : {}),
+    ...(noclient ? { AND: [{ OR: [{ clientId: null }, { client: { name: "Excel 匯入客戶（待整理）" } }] }] } : {}),
   };
   const projects = await db.project.findMany({ where, include: { client: true, manager: true, tasks: true }, orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }] });
   return (
