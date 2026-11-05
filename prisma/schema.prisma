@@ -26,6 +26,7 @@ model User {
   tasks        Task[]
   createdTasks Task[]    @relation("TaskCreator")
   taskComments TaskComment[]
+  approvals    TaskApproval[]
   timeEntries  TimeEntry[]
   managedProjects Project[] @relation("ProjectManager")
   auditLogs    AuditLog[]
@@ -136,6 +137,9 @@ model Task {
   id         String    @id @default(cuid())
   projectId  String
   project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentId   String?   // 子項目：上層任務
+  parent     Task?     @relation("Subtasks", fields: [parentId], references: [id], onDelete: Cascade)
+  children   Task[]    @relation("Subtasks")
   title      String
   description String?
   status     String    @default("TODO") // TODO | DOING | REVIEW | DONE
@@ -151,7 +155,24 @@ model Task {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @default(now()) @updatedAt
   comments   TaskComment[]
+  approvals  TaskApproval[]
   timeEntries TimeEntry[]
+}
+
+/** 簽核紀錄：每一次送審、核准、退回、撤回、重新開啟都留下誰、何時、前後狀態與意見 */
+model TaskApproval {
+  id         String   @id @default(cuid())
+  taskId     String
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  action     String   // SUBMIT | WITHDRAW | APPROVE | REJECT | REOPEN
+  fromStatus String
+  toStatus   String
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([taskId, createdAt])
 }
 
 /** 任務留言與活動紀錄（指派、狀態、日期變更） */

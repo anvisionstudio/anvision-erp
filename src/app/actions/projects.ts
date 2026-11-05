@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser, audit, can } from "@/lib/auth";
-import { canManageProject, canUpdateTask } from "@/lib/perm";
+import { canManageProject, canUpdateTask, signActions, SIGN_LABEL, SIGN_TO, type SignAction } from "@/lib/perm";
 import { str, req, n, dt } from "@/lib/form";
 import { nextNumber } from "@/lib/seq";
 
@@ -44,6 +44,15 @@ async function logActivity(taskId: string, userId: string, body: string) {
   await db.taskComment.create({ data: { taskId, userId, kind: "ACTIVITY", body } });
 }
 
+/** 由狀態變化推得對應的簽核動作，寫入簽核紀錄（任何途徑改狀態都留下紀錄） */
+async function recordSign(taskId: string, user: { id: string }, from: string, to: string, isAssignee: boolean) {
+  if (from === to) return;
+  const action: SignAction | null =
+    to === "REVIEW" ? "SUBMIT" : to === "DONE" ? "APPROVE" : from === "DONE" ? "REOPEN" : from === "REVIEW" ? (isAssignee ? "WITHDRAW" : "REJECT") : null;
+  if (!action) return;
+  await db.taskApproval.create({ data: { taskId, userId: user.id, action, fromStatus: from, toStatus: to } });
+}
+
 function revalidateTask(t: { id: string; projectId: string }) {
   revalidatePath(`/projects/${t.projectId}`);
   revalidatePath(`/tasks/${t.id}`);
@@ -63,16 +72,21 @@ export async function saveTask(f: FormData) {
   if (startDate && dueDate && dueDate < startDate) throw new Error("截止日不能早於開始日");
 
   if (!id) {
-    if (!manage) throw new Error("只有專案經理或專案負責人可以新增任務");
+    const parentId = str(f, "parentId");
+    const parent = parentId ? await db.task.findUniqueOrThrow({ where: { id: parentId }, select: { assigneeId: true, projectId: true, title: true } }) : null;
+    if (parent && parent.projectId !== projectId) throw new Error("上層任務不屬於此專案");
+    if (!manage && !(parent && parent.assigneeId === u.id)) throw new Error("只有專案經理、專案負責人或上層任務的負責人可以新增任務");
+    if (!manage && str(f, "assigneeId") && str(f, "assigneeId") !== parent?.assigneeId) throw new Error("只有專案經理可以指派給其他人");
     const t = await db.task.create({
       data: {
-        projectId, title: req(f, "title"), description: str(f, "description"), assigneeId: str(f, "assigneeId"),
+        projectId, parentId: str(f, "parentId"), title: req(f, "title"), description: str(f, "description"), assigneeId: str(f, "assigneeId"),
         startDate, dueDate, estimateHours: n(f, "estimateHours"), status: str(f, "status") ?? "TODO",
         priority: str(f, "priority") ?? "NORMAL", createdById: u.id,
       },
       include: { assignee: true },
     });
-    await logActivity(t.id, u.id, `建立任務${t.assignee ? `，指派給 ${t.assignee.name}` : ""}`);
+    await logActivity(t.id, u.id, `建立${t.parentId ? "子項目" : "任務"}${t.assignee ? `，指派給 ${t.assignee.name}` : ""}`);
+    if (t.parentId) await logActivity(t.parentId, u.id, `新增子項目「${t.title}」`);
     await audit(u.id, "新增", "任務", t.id, t.title);
     revalidateTask(t);
     if (str(f, "open")) redirect(`/tasks/${t.id}`);
@@ -90,6 +104,8 @@ export async function saveTask(f: FormData) {
     data.priority = str(f, "priority") ?? cur.priority;
     data.estimateHours = n(f, "estimateHours", cur.estimateHours);
   }
+  if (!manage && data.status === "DONE" && cur.status !== "DONE") throw new Error("完成需由專案經理核准：請把狀態改為「審核中」或在時間軸按「送審」");
+  if (!manage && cur.status === "DONE" && data.status !== "DONE") throw new Error("已核准的任務只能由專案經理重新開啟");
   if (data.status === "DONE" && cur.status !== "DONE") data.completedAt = new Date();
   if (data.status !== "DONE") data.completedAt = null;
   const t = await db.task.update({ where: { id }, data, include: { assignee: true } });
@@ -101,6 +117,7 @@ export async function saveTask(f: FormData) {
   if (manage && cur.priority !== t.priority) log.push(`優先度：${t.priority}`);
   if (cur.title !== t.title) log.push(`標題改為「${t.title}」`);
   for (const l of log) await logActivity(t.id, u.id, l);
+  await recordSign(t.id, u, cur.status, t.status, cur.assigneeId === u.id);
   await audit(u.id, "更新", "任務", t.id, t.title);
   revalidateTask(t);
 }
@@ -110,8 +127,11 @@ export async function setTaskStatus(id: string, status: string) {
   const cur = await db.task.findUniqueOrThrow({ where: { id }, include: { project: { select: { managerId: true } } } });
   if (!canUpdateTask(u, cur, cur.project)) throw new Error("您不是此任務的負責人，無法變更狀態");
   if (cur.status === status) return;
+  const manage = canManageProject(u, cur.project);
+  if (!manage && (status === "DONE" || cur.status === "DONE")) throw new Error("完成與重新開啟需由專案經理簽核");
   const t = await db.task.update({ where: { id }, data: { status, completedAt: status === "DONE" ? new Date() : null } });
   await logActivity(id, u.id, `狀態：${STATUS_LABEL[cur.status] ?? cur.status} → ${STATUS_LABEL[status] ?? status}`);
+  await recordSign(id, u, cur.status, status, cur.assigneeId === u.id);
   revalidateTask(t);
 }
 
@@ -140,6 +160,53 @@ export async function setProjectDates(id: string, start: string, end: string) {
   revalidatePath("/timeline");
 }
 
+/**
+ * 簽核：送審 / 撤回 / 核准 / 退回 / 重新開啟。
+ * 權限依 signActions()；每次動作都寫入 TaskApproval（誰、何時、前後狀態、意見）與活動紀錄。
+ */
+export async function signTask(id: string, action: SignAction, note?: string) {
+  const u = await requireUser("projects");
+  const cur = await db.task.findUniqueOrThrow({ where: { id }, include: { project: { select: { managerId: true } } } });
+  if (!signActions(u, cur, cur.project).includes(action)) throw new Error(`您無法對此任務執行「${SIGN_LABEL[action] ?? action}」`);
+  const clean = note?.trim().slice(0, 1000) || null;
+  if (action === "REJECT" && !clean) throw new Error("退回時請填寫原因");
+  const toStatus = SIGN_TO[action];
+  const t = await db.$transaction(async (tx) => {
+    const t = await tx.task.update({ where: { id }, data: { status: toStatus, completedAt: toStatus === "DONE" ? new Date() : null } });
+    await tx.taskApproval.create({ data: { taskId: id, userId: u.id, action, fromStatus: cur.status, toStatus, note: clean } });
+    await tx.taskComment.create({ data: { taskId: id, userId: u.id, kind: "ACTIVITY", body: `簽核：${SIGN_LABEL[action]}${clean ? `（${clean}）` : ""}` } });
+    return t;
+  });
+  await audit(u.id, `簽核-${SIGN_LABEL[action]}`, "任務", id, cur.title);
+  revalidateTask(t);
+}
+
+/** 任務頁的簽核表單 */
+export async function signTaskForm(f: FormData) {
+  await signTask(req(f, "id"), req(f, "action") as SignAction, str(f, "note") ?? undefined);
+}
+
+/** 時間軸上的「新子項目」：在專案或任務底下快速新增 */
+export async function addSubItem(parent: { projectId: string; parentId?: string | null }, title: string) {
+  const u = await requireUser("projects");
+  const name = title.trim();
+  if (!name) throw new Error("請輸入名稱");
+  const project = await db.project.findUniqueOrThrow({ where: { id: parent.projectId }, select: { managerId: true } });
+  const up = parent.parentId ? await db.task.findUniqueOrThrow({ where: { id: parent.parentId } }) : null;
+  if (up && up.projectId !== parent.projectId) throw new Error("上層任務不屬於此專案");
+  if (!(canManageProject(u, project) || (up && up.assigneeId === u.id))) throw new Error("只有專案經理、專案負責人或上層任務的負責人可以新增子項目");
+  const t = await db.task.create({
+    data: {
+      projectId: parent.projectId, parentId: up?.id ?? null, title: name, createdById: u.id,
+      assigneeId: up?.assigneeId ?? null, startDate: up?.startDate ?? null, dueDate: up?.dueDate ?? null, priority: up?.priority ?? "NORMAL",
+    },
+  });
+  await logActivity(t.id, u.id, up ? `建立子項目（屬於「${up.title}」）` : "建立任務");
+  if (up) await logActivity(up.id, u.id, `新增子項目「${t.title}」`);
+  revalidateTask(t);
+  return t.id;
+}
+
 export async function addTaskComment(f: FormData) {
   const u = await requireUser("projects");
   const taskId = req(f, "taskId");
@@ -165,7 +232,7 @@ export async function deleteTask(id: string) {
   const t = await db.task.delete({ where: { id } });
   await audit(u.id, "刪除", "任務", id, t.title);
   revalidateTask(t);
-  redirect(`/projects/${t.projectId}`);
+  redirect(t.parentId ? `/tasks/${t.parentId}` : `/projects/${t.projectId}`);
 }
 
 // ── 工時 ──

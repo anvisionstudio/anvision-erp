@@ -5,9 +5,9 @@ import { db } from "@/lib/db";
 import { requireUser, can } from "@/lib/auth";
 import { twd, date, num, isoDate, totals } from "@/lib/format";
 import { projectProfit } from "@/lib/reports";
-import { saveTask, setTaskStatus, saveTime, deleteProject, setTaskDates, setProjectDates } from "@/app/actions/projects";
-import { canManageProject, canUpdateTask, PRIORITY } from "@/lib/perm";
-import { projectItems } from "@/lib/timeline-items";
+import { saveTask, setTaskStatus, saveTime, deleteProject, setTaskDates, setProjectDates, signTask, addSubItem } from "@/app/actions/projects";
+import { canManageProject, canUpdateTask, PRIORITY, PRIORITY_OPTIONS } from "@/lib/perm";
+import { projectItems, TIMELINE_TASK_INCLUDE } from "@/lib/timeline-items";
 import { Timeline } from "@/components/timeline";
 import { PageHeader, Card, Badge, Empty, Stat, Field, Select, Tabs } from "@/components/ui";
 import { ConfirmButton, SubmitButton } from "@/components/client";
@@ -23,7 +23,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
     where: { id },
     include: {
       client: true, manager: true, quote: true,
-      tasks: { include: { assignee: true, _count: { select: { comments: { where: { kind: "COMMENT" } } } } }, orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }] },
+      tasks: { include: { ...TIMELINE_TASK_INCLUDE, assignee: true, parent: { select: { title: true } }, _count: { select: { comments: { where: { kind: "COMMENT" } } } } }, orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }] },
       timeEntries: { include: { user: true }, orderBy: { date: "desc" } },
       invoices: { include: { items: true }, orderBy: { issueDate: "desc" } },
       expenses: { include: { vendor: true }, orderBy: { date: "desc" } },
@@ -72,6 +72,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
                     const i = FLOW.indexOf(s);
                     return (
                       <div key={t.id} className="card p-3 text-sm">
+                        {t.parent && <div className="truncate text-xs text-ink-muted">↳ {t.parent.title}</div>}
                         <Link href={`/tasks/${t.id}`} className="link flex min-h-6 items-center font-medium text-ink">{t.title}</Link>
                         <div className="mt-1 flex flex-wrap items-center justify-between gap-1 text-xs text-ink-muted">
                           <span>{t.assignee?.name ?? "未指派"}</span>
@@ -85,8 +86,8 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
                         )}
                         {canUpdateTask(user, t, p) && (
                           <div className="mt-2 flex gap-1">
-                            {i > 0 && <ConfirmButton action={setTaskStatus.bind(null, t.id, FLOW[i - 1])} message="移回上一階段？" className="btn-secondary btn-sm" label="移回上一階段"><ChevronLeft className="h-4 w-4" aria-hidden /></ConfirmButton>}
-                            {i < FLOW.length - 1 && <ConfirmButton action={setTaskStatus.bind(null, t.id, FLOW[i + 1])} message={`移到下一階段？`} className="btn-secondary btn-sm flex-1">下一步<ArrowRight className="h-3.5 w-3.5" aria-hidden /></ConfirmButton>}
+                            {i > 0 && (s !== "DONE" || manage) && <ConfirmButton action={setTaskStatus.bind(null, t.id, FLOW[i - 1])} message="移回上一階段？" className="btn-secondary btn-sm" label="移回上一階段"><ChevronLeft className="h-4 w-4" aria-hidden /></ConfirmButton>}
+                            {i < FLOW.length - 1 && (FLOW[i + 1] !== "DONE" || manage) && <ConfirmButton action={setTaskStatus.bind(null, t.id, FLOW[i + 1])} message={`移到下一階段？`} className="btn-secondary btn-sm flex-1">下一步<ArrowRight className="h-3.5 w-3.5" aria-hidden /></ConfirmButton>}
                           </div>
                         )}
                       </div>
@@ -102,7 +103,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
                 <input type="hidden" name="projectId" value={p.id} />
                 <Field label="任務名稱 *" className="sm:col-span-2"><input name="title" required className="input" /></Field>
                 <Field label="指派給"><Select name="assigneeId" placeholder="未指派" options={users.map((u) => ({ value: u.id, label: u.name }))} /></Field>
-                <Field label="優先度"><Select name="priority" defaultValue="NORMAL" options={Object.entries(PRIORITY).map(([value, x]) => ({ value, label: x.label }))} /></Field>
+                <Field label="優先度"><Select name="priority" defaultValue="NORMAL" options={PRIORITY_OPTIONS} /></Field>
                 <Field label="開始日"><input name="startDate" type="date" defaultValue={isoDate(new Date())} className="input" /></Field>
                 <Field label="截止日"><input name="dueDate" type="date" className="input" /></Field>
                 <Field label="預估工時"><input name="estimateHours" type="number" inputMode="decimal" step="0.5" min={0} defaultValue={0} className="input" /></Field>
@@ -117,7 +118,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
       )}
 
       {tab === "timeline" && (
-        <Timeline items={projectItems(user, [p])} moveTask={setTaskDates} moveProject={setProjectDates} defaultZoom="week" emptyText="此專案還沒有任務" />
+        <Timeline items={projectItems(user, [p])} moveTask={setTaskDates} moveProject={setProjectDates} signTask={signTask} addSubItem={addSubItem} defaultZoom="week" emptyText="此專案還沒有任務" />
       )}
 
       {tab === "time" && (

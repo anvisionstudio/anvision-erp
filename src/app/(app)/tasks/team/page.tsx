@@ -2,12 +2,11 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { date, num, isoDate } from "@/lib/format";
-import { canManageProject, PRIORITY } from "@/lib/perm";
+import { canManageProject, PRIORITY, PRIORITY_OPTIONS } from "@/lib/perm";
 import { saveTask } from "@/app/actions/projects";
 import { PageHeader, Card, Badge, Empty, Field, Select, Tabs, Chip } from "@/components/ui";
 import { SubmitButton } from "@/components/client";
 
-const PRI_ORDER: Record<string, number> = { URGENT: 0, HIGH: 1, NORMAL: 2, LOW: 3 };
 
 export default async function TeamTasks({ searchParams }: { searchParams: Promise<{ user?: string; show?: string }> }) {
   const me = await requireUser("projects");
@@ -43,7 +42,7 @@ export default async function TeamTasks({ searchParams }: { searchParams: Promis
   const list = tasks
     .filter((t) => (!sel ? true : sel === "none" ? !t.assigneeId : t.assigneeId === sel))
     .filter((t) => (sp.show === "overdue" ? isOverdue(t) : sp.show === "soon" ? t.dueDate && t.dueDate >= now && t.dueDate <= soon : true))
-    .sort((a, b) => (isOverdue(b) ? 1 : 0) - (isOverdue(a) ? 1 : 0) || (PRI_ORDER[a.priority] ?? 2) - (PRI_ORDER[b.priority] ?? 2) || (a.dueDate?.getTime() ?? 9e15) - (b.dueDate?.getTime() ?? 9e15));
+    .sort((a, b) => (isOverdue(b) ? 1 : 0) - (isOverdue(a) ? 1 : 0) || (PRIORITY[a.priority]?.order ?? 3) - (PRIORITY[b.priority]?.order ?? 3) || (a.dueDate?.getTime() ?? 9e15) - (b.dueDate?.getTime() ?? 9e15));
   const q = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams(Object.entries({ user: sp.user, show: sp.show, ...patch }).filter(([, v]) => v) as [string, string][]);
     return `/tasks/team${p.size ? `?${p}` : ""}`;
@@ -112,7 +111,7 @@ export default async function TeamTasks({ searchParams }: { searchParams: Promis
                 <Field label="截止日"><input type="date" name="dueDate" className="input" /></Field>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="優先度"><Select name="priority" defaultValue="NORMAL" options={Object.entries(PRIORITY).map(([value, p]) => ({ value, label: p.label }))} /></Field>
+                <Field label="優先度"><Select name="priority" defaultValue="NORMAL" options={PRIORITY_OPTIONS} /></Field>
                 <Field label="預估工時"><input type="number" inputMode="decimal" step="0.5" min={0} name="estimateHours" defaultValue={0} className="input" /></Field>
               </div>
               <Field label="說明"><textarea name="description" rows={3} className="input" /></Field>

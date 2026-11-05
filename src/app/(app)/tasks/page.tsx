@@ -3,7 +3,7 @@ import { ArrowRight } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { date } from "@/lib/format";
-import { PRIORITY } from "@/lib/perm";
+import { PRIORITY, canManageProject } from "@/lib/perm";
 import { setTaskStatus } from "@/app/actions/projects";
 import { PageHeader, Card, Badge, Empty, Tabs, Chip } from "@/components/ui";
 import { ConfirmButton } from "@/components/client";
@@ -46,7 +46,7 @@ export default async function MyTasks({ searchParams }: { searchParams: Promise<
                   <td><Badge label={pr.label} tone={pr.tone} /></td>
                   <td className={`whitespace-nowrap ${late ? "font-medium text-danger" : ""}`}>{t.startDate ? `${date(t.startDate)} – ` : ""}{date(t.dueDate)}{late && <span className="ml-1 text-xs">逾期</span>}</td>
                   <td><Badge status={t.status} /></td>
-                  <td className="text-right">{NEXT[t.status] && <ConfirmButton action={setTaskStatus.bind(null, t.id, NEXT[t.status])} message={`將「${t.title}」標記為${NEXT_LABEL[t.status]}？`} className="btn-secondary btn-sm">{NEXT_LABEL[t.status]}<ArrowRight className="h-3.5 w-3.5" aria-hidden /></ConfirmButton>}</td>
+                  <td className="text-right">{NEXT[t.status] && (t.status !== "REVIEW" || canManageProject(user, t.project)) && <ConfirmButton action={setTaskStatus.bind(null, t.id, NEXT[t.status])} message={`將「${t.title}」標記為${NEXT_LABEL[t.status]}？`} className="btn-secondary btn-sm">{NEXT_LABEL[t.status]}<ArrowRight className="h-3.5 w-3.5" aria-hidden /></ConfirmButton>}</td>
                 </tr>
               );
             })}</tbody>

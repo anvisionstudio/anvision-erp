@@ -100,6 +100,17 @@ async function main() {
     });
   }
 
+  // 子項目與簽核紀錄示範
+  const ext = await db.task.findFirst({ where: { title: "識別系統延伸應用" } });
+  if (ext) {
+    const subs: [string, string, number, number][] = [["名片與信封", "DONE", -5, -1], ["門市招牌", "REVIEW", -2, 4], ["包裝與杯套", "DOING", 1, 9]];
+    for (const [title, status, a, b] of subs) {
+      const sub = await db.task.create({ data: { projectId: ext.projectId, parentId: ext.id, title, status, assigneeId: des.id, createdById: pm.id, priority: "HIGH", startDate: new Date(day0 + a * 864e5), dueDate: new Date(day0 + b * 864e5) } });
+      if (status !== "DOING") await db.taskApproval.create({ data: { taskId: sub.id, userId: des.id, action: "SUBMIT", fromStatus: "DOING", toStatus: "REVIEW" } });
+      if (status === "DONE") await db.taskApproval.create({ data: { taskId: sub.id, userId: pm.id, action: "APPROVE", fromStatus: "REVIEW", toStatus: "DONE", note: "OK，可以交付客戶" } });
+    }
+  }
+
   for (let i = 0; i < 20; i++) {
     const day = new Date(Date.now() - i * 864e5);
     if (day.getDay() === 0 || day.getDay() === 6) continue;
