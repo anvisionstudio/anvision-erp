@@ -16,7 +16,9 @@ const NAV: { title: string; items: { href: string; label: string; icon: string; 
     title: "專案",
     items: [
       { href: "/projects", label: "專案", icon: "projects", area: "projects" },
+      { href: "/timeline", label: "時間軸", icon: "timeline", area: "projects" },
       { href: "/tasks", label: "我的任務", icon: "tasks", area: "projects" },
+      { href: "/tasks/team", label: "團隊任務", icon: "team", area: "projects" },
       { href: "/time", label: "工時紀錄", icon: "time", area: "time" },
     ],
   },

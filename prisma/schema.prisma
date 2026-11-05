@@ -24,6 +24,8 @@ model User {
   sessions     Session[]
   employee     Employee?
   tasks        Task[]
+  createdTasks Task[]    @relation("TaskCreator")
+  taskComments TaskComment[]
   timeEntries  TimeEntry[]
   managedProjects Project[] @relation("ProjectManager")
   auditLogs    AuditLog[]
@@ -135,12 +137,33 @@ model Task {
   projectId  String
   project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   title      String
+  description String?
   status     String    @default("TODO") // TODO | DOING | REVIEW | DONE
+  priority   String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
   assigneeId String?
   assignee   User?     @relation(fields: [assigneeId], references: [id])
+  createdById String?
+  createdBy  User?     @relation("TaskCreator", fields: [createdById], references: [id])
+  startDate  DateTime?
   dueDate    DateTime?
   estimateHours Float  @default(0)
+  completedAt DateTime?
   createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now()) @updatedAt
+  comments   TaskComment[]
+  timeEntries TimeEntry[]
+}
+
+/** 任務留言與活動紀錄（指派、狀態、日期變更） */
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  kind      String   @default("COMMENT") // COMMENT | ACTIVITY
+  body      String
+  createdAt DateTime @default(now())
 }
 
 model TimeEntry {
@@ -149,6 +172,8 @@ model TimeEntry {
   user      User     @relation(fields: [userId], references: [id])
   projectId String
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId    String?
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
   date      DateTime
   hours     Float
   note      String?

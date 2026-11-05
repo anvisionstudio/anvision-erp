@@ -5,7 +5,10 @@ import { db } from "@/lib/db";
 import { requireUser, can } from "@/lib/auth";
 import { twd, date, num, isoDate, totals } from "@/lib/format";
 import { projectProfit } from "@/lib/reports";
-import { saveTask, setTaskStatus, deleteTask, saveTime, deleteProject } from "@/app/actions/projects";
+import { saveTask, setTaskStatus, saveTime, deleteProject, setTaskDates, setProjectDates } from "@/app/actions/projects";
+import { canManageProject, canUpdateTask, PRIORITY } from "@/lib/perm";
+import { projectItems } from "@/lib/timeline-items";
+import { Timeline } from "@/components/timeline";
 import { PageHeader, Card, Badge, Empty, Stat, Field, Select, Tabs } from "@/components/ui";
 import { ConfirmButton, SubmitButton } from "@/components/client";
 import { ProjectForm } from "../form";
@@ -20,7 +23,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
     where: { id },
     include: {
       client: true, manager: true, quote: true,
-      tasks: { include: { assignee: true }, orderBy: [{ status: "asc" }, { dueDate: "asc" }] },
+      tasks: { include: { assignee: true, _count: { select: { comments: { where: { kind: "COMMENT" } } } } }, orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }] },
       timeEntries: { include: { user: true }, orderBy: { date: "desc" } },
       invoices: { include: { items: true }, orderBy: { issueDate: "desc" } },
       expenses: { include: { vendor: true }, orderBy: { date: "desc" } },
@@ -32,12 +35,14 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
   const [users, clients] = await Promise.all([db.user.findMany({ where: { active: true }, orderBy: { name: "asc" } }), db.client.findMany({ orderBy: { name: "asc" } })]);
   const hours = p.timeEntries.reduce((s, t) => s + t.hours, 0);
   const est = p.tasks.reduce((s, t) => s + t.estimateHours, 0);
+  const manage = canManageProject(user, p);
   const base = `/projects/${p.id}?tab=`;
   const tabs = [
     { key: "tasks", label: `任務 (${p.tasks.length})`, href: base + "tasks" },
+    { key: "timeline", label: "時間軸", href: base + "timeline" },
     { key: "time", label: `工時 (${num(hours, 1)}h)`, href: base + "time" },
     ...(finance ? [{ key: "finance", label: "財務", href: base + "finance" }] : []),
-    ...(user.role !== "STAFF" ? [{ key: "settings", label: "專案設定", href: base + "settings" }] : []),
+    ...(manage ? [{ key: "settings", label: "專案設定", href: base + "settings" }] : []),
   ];
 
   return (
@@ -67,16 +72,23 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
                     const i = FLOW.indexOf(s);
                     return (
                       <div key={t.id} className="card p-3 text-sm">
-                        <div className="font-medium">{t.title}</div>
-                        <div className="mt-1 flex justify-between text-xs text-ink-muted">
+                        <Link href={`/tasks/${t.id}`} className="link flex min-h-6 items-center font-medium text-ink">{t.title}</Link>
+                        <div className="mt-1 flex flex-wrap items-center justify-between gap-1 text-xs text-ink-muted">
                           <span>{t.assignee?.name ?? "未指派"}</span>
-                          <span className={t.dueDate && t.dueDate < new Date() && s !== "DONE" ? "text-danger" : ""}>{t.dueDate ? date(t.dueDate) : ""}</span>
+                          <span className={t.dueDate && t.dueDate < new Date() && s !== "DONE" ? "font-medium text-danger" : ""}>{t.dueDate ? date(t.dueDate) : ""}</span>
                         </div>
-                        <div className="mt-2 flex gap-1">
-                          {i > 0 && <ConfirmButton action={setTaskStatus.bind(null, t.id, FLOW[i - 1])} message="移回上一階段？" className="btn-secondary btn-sm" label="移回上一階段"><ChevronLeft className="h-4 w-4" aria-hidden /></ConfirmButton>}
-                          {i < FLOW.length - 1 && <ConfirmButton action={setTaskStatus.bind(null, t.id, FLOW[i + 1])} message={`移到「${FLOW[i + 1]}」？`} className="btn-secondary btn-sm flex-1">下一步<ArrowRight className="h-3.5 w-3.5" aria-hidden /></ConfirmButton>}
-                          {user.role !== "STAFF" && <ConfirmButton action={deleteTask.bind(null, t.id)} message="刪除此任務？">✕</ConfirmButton>}
-                        </div>
+                        {(t.priority === "HIGH" || t.priority === "URGENT" || t._count.comments > 0) && (
+                          <div className="mt-1.5 flex flex-wrap gap-1.5 text-xs">
+                            {(t.priority === "HIGH" || t.priority === "URGENT") && <Badge label={PRIORITY[t.priority].label} tone={PRIORITY[t.priority].tone} />}
+                            {t._count.comments > 0 && <span className="text-ink-muted">{t._count.comments} 則留言</span>}
+                          </div>
+                        )}
+                        {canUpdateTask(user, t, p) && (
+                          <div className="mt-2 flex gap-1">
+                            {i > 0 && <ConfirmButton action={setTaskStatus.bind(null, t.id, FLOW[i - 1])} message="移回上一階段？" className="btn-secondary btn-sm" label="移回上一階段"><ChevronLeft className="h-4 w-4" aria-hidden /></ConfirmButton>}
+                            {i < FLOW.length - 1 && <ConfirmButton action={setTaskStatus.bind(null, t.id, FLOW[i + 1])} message={`移到下一階段？`} className="btn-secondary btn-sm flex-1">下一步<ArrowRight className="h-3.5 w-3.5" aria-hidden /></ConfirmButton>}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -84,17 +96,28 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
               </div>
             ))}
           </div>
-          <Card title="新增任務">
-            <form action={saveTask} className="grid gap-3 md:grid-cols-6">
-              <input type="hidden" name="projectId" value={p.id} />
-              <Field label="任務名稱 *" className="md:col-span-2"><input name="title" required className="input" /></Field>
-              <Field label="指派給"><Select name="assigneeId" placeholder="未指派" options={users.map((u) => ({ value: u.id, label: u.name }))} /></Field>
-              <Field label="截止日"><input name="dueDate" type="date" className="input" /></Field>
-              <Field label="預估工時"><input name="estimateHours" type="number" step="0.5" defaultValue={0} className="input" /></Field>
-              <div className="flex items-end"><SubmitButton>新增</SubmitButton></div>
-            </form>
-          </Card>
+          {manage ? (
+            <Card title="新增任務 / 指派">
+              <form action={saveTask} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                <input type="hidden" name="projectId" value={p.id} />
+                <Field label="任務名稱 *" className="sm:col-span-2"><input name="title" required className="input" /></Field>
+                <Field label="指派給"><Select name="assigneeId" placeholder="未指派" options={users.map((u) => ({ value: u.id, label: u.name }))} /></Field>
+                <Field label="優先度"><Select name="priority" defaultValue="NORMAL" options={Object.entries(PRIORITY).map(([value, x]) => ({ value, label: x.label }))} /></Field>
+                <Field label="開始日"><input name="startDate" type="date" defaultValue={isoDate(new Date())} className="input" /></Field>
+                <Field label="截止日"><input name="dueDate" type="date" className="input" /></Field>
+                <Field label="預估工時"><input name="estimateHours" type="number" inputMode="decimal" step="0.5" min={0} defaultValue={0} className="input" /></Field>
+                <Field label="說明" className="sm:col-span-2 lg:col-span-4"><input name="description" className="input" /></Field>
+                <div className="flex items-end"><SubmitButton>新增任務</SubmitButton></div>
+              </form>
+            </Card>
+          ) : (
+            <p className="text-sm text-ink-muted">任務由專案經理或專案負責人（{p.manager?.name ?? "未指定"}）建立與指派；您可以更新自己負責的任務進度。</p>
+          )}
         </div>
+      )}
+
+      {tab === "timeline" && (
+        <Timeline items={projectItems(user, [p])} moveTask={setTaskDates} moveProject={setProjectDates} defaultZoom="week" emptyText="此專案還沒有任務" />
       )}
 
       {tab === "time" && (
@@ -143,7 +166,7 @@ export default async function ProjectDetail({ params, searchParams }: { params: 
         </div>
       )}
 
-      {tab === "settings" && user.role !== "STAFF" && (
+      {tab === "settings" && manage && (
         <Card title="專案設定" actions={<ConfirmButton action={deleteProject.bind(null, p.id)} message="確定刪除此專案？所有任務與工時將一併刪除。">刪除專案</ConfirmButton>}>
           <ProjectForm p={p} clients={clients} users={users} />
         </Card>

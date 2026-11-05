@@ -4,14 +4,14 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   LayoutDashboard, Users, FileText, FolderKanban, ListChecks, Clock, Receipt, ArrowLeftRight, BookOpen, Hash,
-  BarChart3, Truck, ShoppingCart, Package, UserRound, CalendarDays, Wallet, RefreshCw, Settings, History, Menu, X, LogOut, UserCog,
+  BarChart3, GanttChart, UsersRound, Truck, ShoppingCart, Package, UserRound, CalendarDays, Wallet, RefreshCw, Settings, History, Menu, X, LogOut, UserCog,
   type LucideIcon,
 } from "lucide-react";
 
 const ICONS: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard, clients: Users, quotes: FileText, projects: FolderKanban, tasks: ListChecks, time: Clock,
   invoices: Receipt, expenses: ArrowLeftRight, journal: BookOpen, accounts: Hash, reports: BarChart3, vendors: Truck,
-  purchases: ShoppingCart, inventory: Package, employees: UserRound, leave: CalendarDays, payroll: Wallet, sync: RefreshCw,
+  timeline: GanttChart, team: UsersRound, purchases: ShoppingCart, inventory: Package, employees: UserRound, leave: CalendarDays, payroll: Wallet, sync: RefreshCw,
   settings: Settings, audit: History,
 };
 
@@ -83,11 +83,11 @@ export function Sidebar({ groups, user, logout }: { groups: NavGroup[]; user: { 
         <div className="shrink-0 border-t border-white/10 px-3 py-3">
           <div className="px-2 text-sm font-medium text-white">{user.name}</div>
           <div className="mt-1 flex items-center justify-between gap-2">
-            <Link href="/account" className="inline-flex min-h-touch items-center gap-2 rounded-md px-2 text-xs text-nav-ink hover:bg-white/10 hover:text-white focus-visible:ring-offset-nav lg:min-h-[2rem]">
-              <UserCog className="h-4 w-4" aria-hidden />{user.role}・我的帳號
+            <Link href="/account" title="我的帳號" className="inline-flex min-h-touch min-w-0 items-center gap-2 rounded-md px-2 text-xs text-nav-ink hover:bg-white/10 hover:text-white focus-visible:ring-offset-nav lg:min-h-[2rem]">
+              <UserCog className="h-4 w-4 shrink-0" aria-hidden /><span className="truncate">{user.role}・帳號</span>
             </Link>
-            <form action={logout}>
-              <button className="inline-flex min-h-touch items-center gap-1.5 rounded-md px-2 text-xs text-nav-ink hover:bg-white/10 hover:text-white focus-visible:ring-offset-nav lg:min-h-[2rem]">
+            <form action={logout} className="shrink-0">
+              <button className="inline-flex min-h-touch items-center gap-1.5 whitespace-nowrap rounded-md px-2 text-xs text-nav-ink hover:bg-white/10 hover:text-white focus-visible:ring-offset-nav lg:min-h-[2rem]">
                 <LogOut className="h-4 w-4" aria-hidden />登出
               </button>
             </form>

@@ -87,8 +87,18 @@ async function main() {
     [p1.id, "識別系統延伸應用", "DOING", des.id, 30], [p1.id, "品牌規範手冊排版", "TODO", des.id, 20],
     [p2.id, "使用者訪談", "DONE", pm.id, 10], [p2.id, "Wireframe", "DOING", des.id, 24], [p2.id, "首頁視覺", "TODO", des.id, 16], [p2.id, "元件庫建置", "TODO", des.id, 24],
   ];
-  for (const [projectId, title, status, assigneeId, estimateHours] of tasks)
-    await db.task.create({ data: { projectId, title, status, assigneeId, estimateHours, dueDate: new Date(Date.now() + (status === "DONE" ? -10 : 7) * 864e5) } });
+  const day0 = new Date(new Date().toISOString().slice(0, 10) + "T00:00:00Z").getTime();
+  const offsets: Record<string, [number, number]> = { DONE: [-24, -12], REVIEW: [-10, 2], DOING: [-5, 9], TODO: [6, 20] };
+  for (const [k, [projectId, title, status, assigneeId, estimateHours]] of tasks.entries()) {
+    const [a, b] = offsets[status];
+    await db.task.create({
+      data: {
+        projectId, title, status, assigneeId, estimateHours, createdById: pm.id, priority: k % 4 === 0 ? "HIGH" : "NORMAL",
+        startDate: new Date(day0 + (a + k) * 864e5), dueDate: new Date(day0 + (b + k) * 864e5),
+        completedAt: status === "DONE" ? new Date(day0 + (b + k) * 864e5) : null,
+      },
+    });
+  }
 
   for (let i = 0; i < 20; i++) {
     const day = new Date(Date.now() - i * 864e5);

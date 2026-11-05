@@ -51,7 +51,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
             <table className="tbl"><tbody>
               {myTasks.map((t) => (
                 <tr key={t.id}>
-                  <td><div className="font-medium">{t.title}</div><Link href={`/projects/${t.projectId}`} className="text-xs text-ink-muted hover:underline">{t.project.name}</Link></td>
+                  <td><Link href={`/tasks/${t.id}`} className="link">{t.title}</Link><div className="text-xs text-ink-muted">{t.project.name}</div></td>
                   <td><Badge status={t.status} /></td>
                   <td className={`text-right text-xs ${t.dueDate && t.dueDate < now ? "text-danger" : "text-ink-muted"}`}>{date(t.dueDate)}</td>
                 </tr>
