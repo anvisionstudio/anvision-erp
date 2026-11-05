@@ -48,7 +48,7 @@ export async function importVendorsCsv(_: CsvState, f: FormData): Promise<CsvSta
       if (!name) continue;
       const data: Record<string, string | null> = {};
       for (const k of ["category", "aliases", "taxId", "contact", "phone", "email", "address", "bankInfo", "notes"] as const) {
-        if (ix[k] >= 0) data[k] = get(ix[k]);
+        const v = get(ix[k]); if (v) data[k] = v; // 空白儲存格不覆蓋既有資料
       }
       const exists = await db.vendor.findFirst({ where: { name } });
       if (exists) { await db.vendor.update({ where: { id: exists.id }, data }); updated++; }

@@ -56,7 +56,7 @@ export default async function Vendors({ searchParams }: { searchParams: Promise<
         )}
       </Card>
       <Card title="批次匯入 / 更新供應商（CSV）">
-        <p className="mb-3 text-sm text-ink-muted">第一列為欄位名稱：名稱、類別、別名、統編、聯絡人、電話、Email、地址、匯款帳戶、備註（只有「名稱」必填）。同名供應商會更新，其餘新增。別名請用逗號或「、」分隔。</p>
+        <p className="mb-3 text-sm text-ink-muted">第一列為欄位名稱：名稱、類別、別名、統編、聯絡人、電話、Email、地址、匯款帳戶、備註（只有「名稱」必填）。同名供應商會更新（空白欄位保留原資料），其餘新增。別名請用逗號或「、」分隔。</p>
         <VendorCsvForm />
       </Card>
     </>

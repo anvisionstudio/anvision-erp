@@ -59,7 +59,7 @@ export default async function Clients({ searchParams }: { searchParams: Promise<
         )}
       </Card>
       <Card title="批次匯入 / 更新客戶（CSV）">
-        <p className="mb-3 text-sm text-ink-muted">第一列為欄位名稱：名稱、別名、統編、聯絡人、電話、Email、地址、備註（只有「名稱」必填）。同名客戶會更新；匯入後會依別名自動把專案與請款單歸給客戶。</p>
+        <p className="mb-3 text-sm text-ink-muted">第一列為欄位名稱：名稱、別名、統編、聯絡人、電話、Email、地址、網站、備註（只有「名稱」必填）。同名客戶會更新，空白欄位保留原資料；匯入後會依別名自動把專案與請款單歸給客戶。</p>
         <ClientCsvForm />
       </Card>
     </>

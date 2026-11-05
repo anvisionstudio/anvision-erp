@@ -134,7 +134,8 @@ export async function importClientsCsv(_: ClientCsvState, f: FormData): Promise<
       const name = get(ix.name);
       if (!name) continue;
       const data: Record<string, string | null> = {};
-      for (const k of ["aliases", "taxId", "contact", "phone", "email", "address", "notes", "website"] as const) if (ix[k] >= 0) data[k] = get(ix[k]);
+      // 空白儲存格不覆蓋既有資料
+      for (const k of ["aliases", "taxId", "contact", "phone", "email", "address", "notes", "website"] as const) { const v = get(ix[k]); if (v) data[k] = v; }
       const exists = await db.client.findFirst({ where: { name } });
       if (exists) { await db.client.update({ where: { id: exists.id }, data }); updated++; }
       else { await db.client.create({ data: { name, ...data } }); created++; }
