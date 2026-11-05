@@ -252,6 +252,8 @@ model Expense {
 model Vendor {
   id        String          @id @default(cuid())
   name      String
+  category  String?         // 印刷、大圖輸出、設計外包…
+  aliases   String?         // 日記簿摘要中的別名，以逗號分隔（用來計算帳上交易）
   taxId     String?
   contact   String?
   email     String?

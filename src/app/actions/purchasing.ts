@@ -6,6 +6,7 @@ import { requireUser, audit } from "@/lib/auth";
 import { str, req, n, dt, items } from "@/lib/form";
 import { nextNumber } from "@/lib/seq";
 import { totals } from "@/lib/format";
+import { parseCsv } from "@/lib/csv";
 import { postExpense, createEntry, resolveAccount, autopostEnabled, ACC } from "@/lib/ledger";
 
 export async function saveVendor(f: FormData) {
@@ -14,11 +15,51 @@ export async function saveVendor(f: FormData) {
   const data = {
     name: req(f, "name"), taxId: str(f, "taxId"), contact: str(f, "contact"), email: str(f, "email"),
     phone: str(f, "phone"), address: str(f, "address"), bankInfo: str(f, "bankInfo"), notes: str(f, "notes"),
+    category: str(f, "category"), aliases: str(f, "aliases"),
   };
   const v = id ? await db.vendor.update({ where: { id }, data }) : await db.vendor.create({ data });
   await audit(u.id, id ? "更新" : "新增", "供應商", v.id, v.name);
   revalidatePath("/vendors");
-  redirect("/vendors");
+  redirect(`/vendors/${v.id}`);
+}
+
+export type CsvState = { ok?: string; error?: string } | null;
+
+/** 以 CSV 批次匯入供應商（依名稱新增或更新） */
+export async function importVendorsCsv(_: CsvState, f: FormData): Promise<CsvState> {
+  try {
+    const u = await requireUser("purchasing");
+    const file = f.get("file");
+    if (!(file instanceof File) || !file.size) return { error: "請選擇 CSV 檔案" };
+    const rows = parseCsv(await file.text());
+    if (rows.length < 2) return { error: "CSV 沒有資料列" };
+    const head = rows[0].map((h) => h.trim());
+    const col = (...names: string[]) => head.findIndex((h) => names.includes(h));
+    const ix = {
+      name: col("名稱", "供應商", "name"), category: col("類別", "category"), aliases: col("別名", "aliases"),
+      taxId: col("統編", "統一編號", "taxId"), contact: col("聯絡人", "contact"), phone: col("電話", "phone"),
+      email: col("Email", "email", "信箱"), address: col("地址", "address"), bankInfo: col("匯款帳戶", "bankInfo"), notes: col("備註", "notes"),
+    };
+    if (ix.name < 0) return { error: "CSV 第一列需包含「名稱」欄位" };
+    let created = 0, updated = 0;
+    for (const r of rows.slice(1)) {
+      const get = (i: number) => (i >= 0 ? r[i]?.trim() || null : null);
+      const name = get(ix.name);
+      if (!name) continue;
+      const data: Record<string, string | null> = {};
+      for (const k of ["category", "aliases", "taxId", "contact", "phone", "email", "address", "bankInfo", "notes"] as const) {
+        if (ix[k] >= 0) data[k] = get(ix[k]);
+      }
+      const exists = await db.vendor.findFirst({ where: { name } });
+      if (exists) { await db.vendor.update({ where: { id: exists.id }, data }); updated++; }
+      else { await db.vendor.create({ data: { name, ...data } }); created++; }
+    }
+    await audit(u.id, "CSV 匯入", "供應商", undefined, `新增 ${created}・更新 ${updated}`);
+    revalidatePath("/vendors");
+    return { ok: `匯入完成：新增 ${created} 家、更新 ${updated} 家供應商` };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
 }
 
 export async function deleteVendor(id: string) {
@@ -28,6 +69,7 @@ export async function deleteVendor(id: string) {
   await db.vendor.delete({ where: { id } });
   await audit(u.id, "刪除", "供應商", id, v.name);
   revalidatePath("/vendors");
+  redirect("/vendors");
 }
 
 // ── 採購單 ──

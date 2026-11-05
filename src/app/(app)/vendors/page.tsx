@@ -1,50 +1,63 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { twd } from "@/lib/format";
-import { saveVendor, deleteVendor } from "@/app/actions/purchasing";
-import { PageHeader, Card, Empty, Field } from "@/components/ui";
-import { ConfirmButton, SubmitButton } from "@/components/client";
+import { twd, date } from "@/lib/format";
+import { vendorLedger } from "@/lib/vendor-ledger";
+import { PageHeader, Card, Empty, Badge, Stat } from "@/components/ui";
+import { VendorForm } from "./form";
+import { VendorCsvForm } from "./csv";
 
-export default async function Vendors({ searchParams }: { searchParams: Promise<{ edit?: string; new?: string }> }) {
+export default async function Vendors({ searchParams }: { searchParams: Promise<{ new?: string; cat?: string; q?: string }> }) {
   await requireUser("purchasing");
   const sp = await searchParams;
-  const vendors = await db.vendor.findMany({ include: { expenses: true }, orderBy: { name: "asc" } });
-  const v = sp.edit ? vendors.find((x) => x.id === sp.edit) : undefined;
+  const [all, { stats }] = await Promise.all([db.vendor.findMany({ include: { expenses: true }, orderBy: { name: "asc" } }), vendorLedger()]);
+  const categories = [...new Set(all.map((v) => v.category).filter((c): c is string => !!c))].sort();
+  const vendors = all
+    .filter((v) => !sp.cat || v.category === sp.cat)
+    .filter((v) => !sp.q || [v.name, v.aliases, v.contact, v.taxId].some((x) => x?.includes(sp.q!)))
+    .map((v) => ({ v, s: stats.get(v.id)!, unpaid: v.expenses.filter((e) => e.status === "UNPAID").reduce((t, e) => t + e.amount + e.tax, 0), erp: v.expenses.reduce((t, e) => t + e.amount, 0) }))
+    .sort((a, b) => b.s.spend + b.erp - (a.s.spend + a.erp));
+  const total = vendors.reduce((t, x) => t + x.s.spend + x.erp, 0);
+  const prepaid = vendors.reduce((t, x) => t + x.s.prepaid, 0);
   return (
     <>
-      <PageHeader title="供應商" sub="外包夥伴、印刷廠、器材商、軟體服務" actions={<Link href="/vendors?new=1" className="btn-primary">＋ 新增供應商</Link>} />
-      {(sp.new || v) && (
-        <Card title={v ? `編輯 ${v.name}` : "新增供應商"} className="mb-6">
-          <form action={saveVendor} className="grid gap-4 md:grid-cols-3">
-            {v && <input type="hidden" name="id" value={v.id} />}
-            <Field label="名稱 *"><input name="name" required defaultValue={v?.name} className="input" /></Field>
-            <Field label="統一編號"><input name="taxId" defaultValue={v?.taxId ?? ""} className="input" /></Field>
-            <Field label="聯絡人"><input name="contact" defaultValue={v?.contact ?? ""} className="input" /></Field>
-            <Field label="Email"><input name="email" defaultValue={v?.email ?? ""} className="input" /></Field>
-            <Field label="電話"><input name="phone" defaultValue={v?.phone ?? ""} className="input" /></Field>
-            <Field label="地址"><input name="address" defaultValue={v?.address ?? ""} className="input" /></Field>
-            <Field label="匯款帳戶" className="md:col-span-3"><input name="bankInfo" defaultValue={v?.bankInfo ?? ""} className="input" placeholder="銀行 / 分行 / 帳號 / 戶名" /></Field>
-            <Field label="備註" className="md:col-span-3"><textarea name="notes" defaultValue={v?.notes ?? ""} className="input" rows={2} /></Field>
-            <div className="flex gap-2"><SubmitButton>儲存</SubmitButton><Link href="/vendors" className="btn-secondary">取消</Link></div>
-          </form>
-        </Card>
-      )}
-      <Card pad={false}>
-        {vendors.length === 0 ? <Empty /> : (
+      <PageHeader title="供應商" sub="外包夥伴、印刷廠、材料商、軟體服務" actions={<Link href="/vendors?new=1" className="btn-primary">＋ 新增供應商</Link>} />
+      {sp.new && <Card title="新增供應商" className="mb-6"><VendorForm categories={categories} /></Card>}
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Stat label="供應商" value={vendors.length} />
+        <Stat label="帳上成本 / 費用合計" value={twd(total)} hint="依日記簿摘要別名比對" />
+        <Stat label="預付儲值餘額" value={twd(prepaid)} />
+      </div>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Link href="/vendors" className={`rounded-full px-3 py-1 text-xs ${!sp.cat ? "bg-brand-600 text-white" : "bg-slate-200 text-slate-600"}`}>全部</Link>
+        {categories.map((c) => (
+          <Link key={c} href={`/vendors?cat=${encodeURIComponent(c)}`} className={`rounded-full px-3 py-1 text-xs ${sp.cat === c ? "bg-brand-600 text-white" : "bg-slate-200 text-slate-600"}`}>{c}</Link>
+        ))}
+        <form className="ml-auto"><input name="q" defaultValue={sp.q} placeholder="搜尋供應商…" className="input w-48" /></form>
+      </div>
+      <Card pad={false} className="mb-6">
+        {vendors.length === 0 ? <Empty>尚無供應商，可用下方「匯入 CSV」批次建立</Empty> : (
           <table className="tbl">
-            <thead><tr><th>名稱</th><th>統編</th><th>聯絡人</th><th>電話 / Email</th><th className="text-right">未付帳款</th><th className="text-right">累計交易</th><th /></tr></thead>
-            <tbody>{vendors.map((x) => (
-              <tr key={x.id}>
-                <td className="font-medium">{x.name}</td><td>{x.taxId}</td><td>{x.contact}</td>
-                <td className="text-xs text-slate-500">{x.phone}<br />{x.email}</td>
-                <td className="num">{twd(x.expenses.filter((e) => e.status === "UNPAID").reduce((s, e) => s + e.amount + e.tax, 0))}</td>
-                <td className="num">{twd(x.expenses.reduce((s, e) => s + e.amount, 0))}</td>
-                <td className="whitespace-nowrap text-right"><Link href={`/vendors?edit=${x.id}`} className="btn-secondary btn-sm">編輯</Link>{" "}<ConfirmButton action={deleteVendor.bind(null, x.id)} message="刪除此供應商？">✕</ConfirmButton></td>
+            <thead><tr><th>名稱</th><th>類別</th><th>聯絡</th><th className="text-right">帳上成本 / 費用</th><th className="text-right">預付餘額</th><th className="text-right">筆數</th><th className="text-right">專案</th><th>最近交易</th><th className="text-right">ERP 未付</th></tr></thead>
+            <tbody>{vendors.map(({ v, s, unpaid, erp }) => (
+              <tr key={v.id}>
+                <td><Link href={`/vendors/${v.id}`} className="link">{v.name}</Link>{v.taxId && <div className="text-xs text-slate-400">統編 {v.taxId}</div>}</td>
+                <td>{v.category && <Badge label={v.category} />}</td>
+                <td className="text-xs text-slate-500">{v.contact}{v.phone && <div>{v.phone}</div>}</td>
+                <td className="num font-medium">{twd(s.spend + erp)}</td>
+                <td className="num">{s.prepaid ? twd(s.prepaid) : "—"}</td>
+                <td className="num">{s.lines}</td>
+                <td className="num">{s.projects.size || "—"}</td>
+                <td className="text-xs">{date(s.last)}</td>
+                <td className="num">{unpaid ? twd(unpaid) : "—"}</td>
               </tr>
             ))}</tbody>
           </table>
         )}
+      </Card>
+      <Card title="批次匯入 / 更新供應商（CSV）">
+        <p className="mb-3 text-sm text-slate-500">第一列為欄位名稱：名稱、類別、別名、統編、聯絡人、電話、Email、地址、匯款帳戶、備註（只有「名稱」必填）。同名供應商會更新，其餘新增。別名請用逗號或「、」分隔。</p>
+        <VendorCsvForm />
       </Card>
     </>
   );
