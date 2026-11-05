@@ -1,4 +1,5 @@
 "use server";
+import { getPositions, POSITIONS_KEY, type Position } from "@/lib/positions";
 import { guard } from "@/lib/guard";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
@@ -9,14 +10,32 @@ import { postPayroll } from "@/lib/ledger";
 export async function saveEmployee(f: FormData) {
   const u = await requireUser("hr");
   const id = str(f, "id");
+  const title = str(f, "title");
+  const pos = (await getPositions()).find((p) => p.name === title);
   const data = {
-    name: req(f, "name"), title: str(f, "title"), department: str(f, "department"), email: str(f, "email"),
+    name: req(f, "name"), title, department: str(f, "department") ?? pos?.dept ?? null, email: str(f, "email"),
     phone: str(f, "phone"), hireDate: dt(f, "hireDate"), salary: n(f, "salary"), hourlyCost: n(f, "hourlyCost"),
     annualLeave: n(f, "annualLeave", 7), status: str(f, "status") ?? "ACTIVE", userId: str(f, "userId"),
   };
   if (id) await db.employee.update({ where: { id }, data });
   else await db.employee.create({ data });
   await audit(u.id, id ? "更新" : "新增", "員工", id ?? undefined, data.name);
+  revalidatePath("/hr/employees");
+}
+
+/** 職位清單：新增 / 修改 / 刪除（存在設定中） */
+export async function savePositions(f: FormData) {
+  const u = await requireUser("hr");
+  const names = f.getAll("pname").map(String), depts = f.getAll("pdept").map(String), types = f.getAll("ptype").map(String);
+  const list: Position[] = [];
+  names.forEach((n, i) => {
+    const name = n.trim();
+    if (!name || f.get(`pdel-${i}`) || list.some((p) => p.name === name)) return;
+    list.push({ name, dept: depts[i]?.trim() || "其他", type: types[i] === "CONTRACT" ? "CONTRACT" : "FULL" });
+  });
+  const v = JSON.stringify(list);
+  await db.setting.upsert({ where: { key: POSITIONS_KEY }, create: { key: POSITIONS_KEY, value: v }, update: { value: v } });
+  await audit(u.id, "更新", "職位", undefined, list.map((p) => p.name).join("、"));
   revalidatePath("/hr/employees");
 }
 
