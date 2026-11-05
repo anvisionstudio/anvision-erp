@@ -15,7 +15,7 @@ export async function saveClient(f: FormData) {
   const id = str(f, "id");
   const data = {
     name: req(f, "name"), taxId: str(f, "taxId"), contact: str(f, "contact"), email: str(f, "email"),
-    phone: str(f, "phone"), address: str(f, "address"), notes: str(f, "notes"), aliases: str(f, "aliases"),
+    phone: str(f, "phone"), address: str(f, "address"), notes: str(f, "notes"), aliases: str(f, "aliases"), website: str(f, "website"),
   };
   const c = id ? await db.client.update({ where: { id }, data }) : await db.client.create({ data });
   await db.$transaction((tx) => assignClients(tx), { timeout: 60_000 });
@@ -45,10 +45,14 @@ export async function saveQuote(f: FormData) {
   };
   const q = await db.$transaction(async (tx) => {
     if (id) {
+      const custom = str(f, "number");
+      if (custom && (await tx.quote.findFirst({ where: { number: custom, id: { not: id } } }))) throw new Error(`報價單編號 ${custom} 已存在`);
       await tx.quoteItem.deleteMany({ where: { quoteId: id } });
-      return tx.quote.update({ where: { id }, data: { ...data, items: { create: lines } } });
+      return tx.quote.update({ where: { id }, data: { ...data, ...(custom ? { number: custom } : {}), items: { create: lines } } });
     }
-    return tx.quote.create({ data: { ...data, number: await nextNumber(tx, "Q"), items: { create: lines } } });
+    const custom = str(f, "number");
+    if (custom && (await tx.quote.findUnique({ where: { number: custom } }))) throw new Error(`報價單編號 ${custom} 已存在`);
+    return tx.quote.create({ data: { ...data, number: custom ?? (await nextNumber(tx, "Q")), items: { create: lines } } });
   });
   await audit(u.id, id ? "更新" : "新增", "報價單", q.id, q.number);
   revalidatePath("/quotes");
@@ -98,7 +102,7 @@ export async function quoteToInvoice(id: string, ratio: number) {
       data: {
         number: await nextNumber(tx, "INV"), clientId: q.clientId, projectId: q.projectId, taxRate: q.taxRate,
         dueDate: new Date(Date.now() + 30 * 864e5), notes: `依報價單 ${q.number}`,
-        items: { create: q.items.map((i) => ({ description: i.description + label, quantity: i.quantity, unitPrice: Math.round(i.unitPrice * ratio), sort: i.sort })) },
+        items: { create: q.items.map((i) => ({ description: i.isGroup ? i.description : i.description + label, quantity: i.quantity, unitPrice: Math.round(i.unitPrice * ratio), unit: i.unit, isGroup: i.isGroup, sort: i.sort })) },
       },
     }),
   );
@@ -121,7 +125,7 @@ export async function importClientsCsv(_: ClientCsvState, f: FormData): Promise<
     const ix = {
       name: col("名稱", "客戶", "name"), aliases: col("別名", "aliases"), taxId: col("統編", "統一編號", "taxId"),
       contact: col("聯絡人", "contact"), phone: col("電話", "phone"), email: col("Email", "email", "信箱"),
-      address: col("地址", "address"), notes: col("備註", "notes"),
+      address: col("地址", "address"), notes: col("備註", "notes"), website: col("網站", "website"),
     };
     if (ix.name < 0) return { error: "CSV 第一列需包含「名稱」欄位" };
     let created = 0, updated = 0;
@@ -130,7 +134,7 @@ export async function importClientsCsv(_: ClientCsvState, f: FormData): Promise<
       const name = get(ix.name);
       if (!name) continue;
       const data: Record<string, string | null> = {};
-      for (const k of ["aliases", "taxId", "contact", "phone", "email", "address", "notes"] as const) if (ix[k] >= 0) data[k] = get(ix[k]);
+      for (const k of ["aliases", "taxId", "contact", "phone", "email", "address", "notes", "website"] as const) if (ix[k] >= 0) data[k] = get(ix[k]);
       const exists = await db.client.findFirst({ where: { name } });
       if (exists) { await db.client.update({ where: { id: exists.id }, data }); updated++; }
       else { await db.client.create({ data: { name, ...data } }); created++; }

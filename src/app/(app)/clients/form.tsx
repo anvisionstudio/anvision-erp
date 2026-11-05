@@ -13,6 +13,7 @@ export function ClientForm({ c }: { c?: Client }) {
       <Field label="Email"><input type="email" autoComplete="email" name="email" defaultValue={c?.email ?? ""} className="input" /></Field>
       <Field label="電話"><input type="tel" inputMode="tel" autoComplete="tel" name="phone" defaultValue={c?.phone ?? ""} className="input" /></Field>
       <Field label="地址"><input autoComplete="street-address" name="address" defaultValue={c?.address ?? ""} className="input" /></Field>
+      <Field label="網站"><input inputMode="url" name="website" defaultValue={c?.website ?? ""} className="input" placeholder="https://" autoComplete="url" /></Field>
       <Field label="專案別名（逗號分隔）" className="md:col-span-2">
         <input name="aliases" defaultValue={c?.aliases ?? ""} className="input" placeholder="例如：彤心美學, 彤芯美學, 彤心醫美" />
         <span className="mt-1 block text-xs text-ink-muted">Excel 專案名稱中出現這些字，同步時就會自動歸給這位客戶（已指定客戶的專案不受影響）。</span>

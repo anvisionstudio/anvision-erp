@@ -1,30 +1,69 @@
 import { db } from "@/lib/db";
 import { requireUser, ROLE_LABEL, type Role } from "@/lib/auth";
 import { date } from "@/lib/format";
-import { COMPANY_FIELDS, getCompany } from "@/lib/settings";
-import { saveSettings, saveUser, changeOwnPassword } from "@/app/actions/admin";
+import { COMPANY_FIELDS, DOC_FIELDS, DOC_DEFAULTS, IMAGE_KEYS } from "@/lib/settings";
+import { saveSettings, saveUser, changeOwnPassword, saveCompanyImage, removeCompanyImage } from "@/app/actions/admin";
 import { PageHeader, Card, Field, Select, Badge } from "@/components/ui";
-import { SubmitButton } from "@/components/client";
+import { SubmitButton, ConfirmButton } from "@/components/client";
 
 export default async function Settings() {
   const me = await requireUser("admin");
-  const [co, users] = await Promise.all([getCompany(), db.user.findMany({ orderBy: { createdAt: "asc" } })]);
+  const [rows, users] = await Promise.all([
+    db.setting.findMany({ where: { OR: [{ key: { startsWith: "company." } }, { key: { startsWith: "doc." } }] } }),
+    db.user.findMany({ orderBy: { createdAt: "asc" } }),
+  ]);
+  const val: Record<string, string> = { ...DOC_DEFAULTS, ...Object.fromEntries(rows.map((r) => [r.key, r.value])) };
   const roles = Object.entries(ROLE_LABEL).map(([value, label]) => ({ value, label }));
-  const coMap: Record<string, string> = co;
   return (
     <>
       <PageHeader title="公司與帳號" />
       <div className="grid gap-6 lg:grid-cols-2">
         <Card title="公司資料（顯示於報價單、請款單）">
-          <form action={saveSettings} className="space-y-3">
+          <form action={saveSettings} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {COMPANY_FIELDS.map(([key, label]) => (
-              <Field key={key} label={label}>
-                {key === "company.bank" ? <textarea name={key} rows={3} defaultValue={coMap[key.replace("company.", "")]} className="input" />
-                  : <input name={key} defaultValue={coMap[key.replace("company.", "")]} className="input" />}
+              <Field key={key} label={label} className={key === "company.bank" || key === "company.name" ? "sm:col-span-2" : ""}>
+                {key === "company.bank"
+                  ? <textarea name={key} rows={2} defaultValue={val[key]} className="input" />
+                  : <input name={key} defaultValue={val[key]} className="input" {...(key === "company.email" ? { type: "email" } : key === "company.phone" || key === "company.mobile" ? { type: "tel" } : {})} />}
               </Field>
             ))}
-            <SubmitButton>儲存公司資料</SubmitButton>
+            <div className="sm:col-span-2"><SubmitButton>儲存公司資料</SubmitButton></div>
           </form>
+        </Card>
+        <Card title="報價單 / 請款單格式">
+          <form action={saveSettings} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {DOC_FIELDS.map(([key, label]) => (
+              <Field key={key} label={label} className={key === "doc.quoteTerms" ? "sm:col-span-2" : ""}
+                help={key === "doc.quoteTerms" ? "新報價單會預先帶入；「有效時限」一行會依有效期限自動產生" : key === "doc.validDays" ? "新報價單的有效期限預設為開立日加上此天數" : undefined}>
+                {key === "doc.quoteTerms"
+                  ? <textarea name={key} rows={6} defaultValue={val[key]} className="input" />
+                  : <input name={key} defaultValue={val[key]} className="input" {...(key === "doc.validDays" ? { type: "number", inputMode: "numeric" as const, min: 1 } : {})} />}
+              </Field>
+            ))}
+            <div className="sm:col-span-2"><SubmitButton>儲存單據格式</SubmitButton></div>
+          </form>
+        </Card>
+        <Card title="單據圖片" className="lg:col-span-2">
+          <p className="mb-4 text-sm text-ink-muted">建議上傳去背 PNG。圖片只存在資料庫，不會放進程式碼。</p>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            {IMAGE_KEYS.map(([key, label]) => (
+              <div key={key} className="flex flex-col gap-3">
+                <div className="text-sm font-medium text-ink-muted">{label}</div>
+                <div className="flex h-28 items-center justify-center rounded-md border border-dashed border-line bg-surface-muted p-3">
+                  {val[key]
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={val[key]} alt={label} className="max-h-full max-w-full object-contain" />
+                    : <span className="text-xs text-ink-muted">尚未上傳</span>}
+                </div>
+                <form action={saveCompanyImage} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <input type="hidden" name="key" value={key} />
+                  <input type="file" name="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" required aria-label={`上傳${label}`} className="min-w-0 flex-1 text-sm file:mr-2 file:rounded-md file:border-0 file:bg-primary-soft file:px-3 file:text-primary" />
+                  <SubmitButton className="btn-secondary btn-sm">上傳</SubmitButton>
+                </form>
+                {val[key] && <ConfirmButton action={removeCompanyImage.bind(null, key)} message={`移除「${label}」？`} className="btn-danger btn-sm self-start">移除</ConfirmButton>}
+              </div>
+            ))}
+          </div>
         </Card>
         <div className="space-y-6">
           <Card title="新增帳號">

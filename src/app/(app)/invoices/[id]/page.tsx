@@ -6,8 +6,11 @@ import { twd, date, isoDate } from "@/lib/format";
 import { invoiceAmounts } from "@/lib/reports";
 import { setInvoiceStatus, deleteInvoice, addPayment, deletePayment } from "@/app/actions/finance";
 import { PageHeader, Card, Badge, Field, Select } from "@/components/ui";
-import { ConfirmButton, PrintButton, SubmitButton } from "@/components/client";
-import { DocumentView } from "@/components/document";
+import { ConfirmButton, SubmitButton } from "@/components/client";
+import { DocSheet } from "@/components/sheet";
+import { SheetPreview } from "@/components/sheet-preview";
+import { getCompany } from "@/lib/settings";
+import { FileDown } from "lucide-react";
 
 export default async function InvoiceDetail({ params }: { params: Promise<{ id: string }> }) {
   await requireUser("finance");
@@ -15,6 +18,7 @@ export default async function InvoiceDetail({ params }: { params: Promise<{ id: 
   const inv = await db.invoice.findUnique({ where: { id }, include: { client: true, project: true, items: { orderBy: { sort: "asc" } }, payments: { orderBy: { date: "asc" } } } });
   if (!inv) notFound();
   const a = invoiceAmounts(inv);
+  const co = await getCompany();
   const entries = await db.journalEntry.findMany({ where: { OR: [{ source: "INVOICE", sourceId: inv.id }, { source: "PAYMENT", sourceId: { in: inv.payments.map((p) => p.id) } }] }, orderBy: { date: "asc" } });
   const open = inv.status === "ISSUED" || inv.status === "PARTIAL";
   return (
@@ -22,18 +26,18 @@ export default async function InvoiceDetail({ params }: { params: Promise<{ id: 
       <PageHeader title={`請款單 ${inv.number}`} back="/invoices"
         sub={<span className="flex items-center gap-2"><Badge status={inv.status} />{inv.project && <Link className="link" href={`/projects/${inv.project.id}`}>{inv.project.name}</Link>}</span>}
         actions={<>
-          <PrintButton />
+          <a href={`/print/invoice/${inv.id}?auto=1`} target="_blank" rel="noopener" className="btn-secondary"><FileDown className="h-4 w-4" aria-hidden />下載 PDF</a>
           {inv.status !== "VOID" && <Link href={`/invoices/${inv.id}/edit`} className="btn-secondary">編輯</Link>}
           {inv.status === "DRAFT" && <ConfirmButton action={setInvoiceStatus.bind(null, inv.id, "ISSUED")} message="確認開立？系統將自動產生應收帳款傳票。" className="btn-primary">開立請款</ConfirmButton>}
           {inv.status === "ISSUED" && <ConfirmButton action={setInvoiceStatus.bind(null, inv.id, "VOID")} message="確定作廢？相關傳票將一併沖銷。" className="btn-danger">作廢</ConfirmButton>}
           {inv.status === "DRAFT" && <ConfirmButton action={deleteInvoice.bind(null, inv.id)} message="刪除此草稿？" className="btn-danger">刪除</ConfirmButton>}
         </>} />
       <div className="grid gap-6 xl:grid-cols-3">
-        <div className="xl:col-span-2">
-          <DocumentView kind="請款單" number={inv.number} party={inv.client} partyLabel="客戶" showBank
-            meta={[["開立日期", date(inv.issueDate)], ["付款期限", date(inv.dueDate)], ...(inv.gui ? [["發票號碼", inv.gui] as [string, string]] : []), ...(inv.project ? [["專案", inv.project.name] as [string, string]] : [])]}
-            items={inv.items} taxRate={inv.taxRate} notes={inv.notes}
-            footer={a.paid > 0 && <><div className="flex justify-between text-success"><span>已收款</span><span>{twd(a.paid)}</span></div><div className="flex justify-between font-medium"><span>未收餘額</span><span>{twd(a.balance)}</span></div></>} />
+        <div className="min-w-0 xl:col-span-2">
+          <SheetPreview>
+            <DocSheet co={co} kind={co.invoiceLabel} number={inv.gui ?? inv.number} title={inv.project?.name ?? "請款單"} party={inv.client} date={inv.issueDate} items={inv.items} taxRate={inv.taxRate} notes={inv.notes} showValidity={false} />
+          </SheetPreview>
+          {a.paid > 0 && <p className="mt-3 text-sm text-ink-muted">已收款 {twd(a.paid)}，未收餘額 <span className="font-medium text-ink">{twd(a.balance)}</span></p>}
         </div>
         <div className="no-print space-y-6">
           <Card title="收款紀錄" pad={false}>

@@ -76,7 +76,7 @@ export async function deleteVendor(id: string) {
 export async function savePO(f: FormData) {
   const u = await requireUser("purchasing");
   const id = str(f, "id");
-  const lines = items(f).map(({ sort: _s, ...x }) => x);
+  const lines = items(f).filter((i) => !i.isGroup).map(({ sort: _s, unit: _u, isGroup: _g, ...x }) => x);
   const data = {
     vendorId: req(f, "vendorId"), projectId: str(f, "projectId"),
     orderDate: dt(f, "orderDate") ?? new Date(), taxRate: n(f, "taxRate", 0.05), notes: str(f, "notes"),

@@ -68,6 +68,7 @@ model Client {
   email     String?
   phone     String?
   address   String?
+  website   String?
   notes     String?
   createdAt DateTime  @default(now())
   quotes    Quote[]
@@ -99,6 +100,8 @@ model QuoteItem {
   description String
   quantity    Float  @default(1)
   unitPrice   Float  @default(0)
+  unit        String? // 單位：篇、支、則、場、張…
+  isGroup     Boolean @default(false) // 分類標題列（只有說明文字）
   sort        Int    @default(0)
 }
 
@@ -213,6 +216,8 @@ model InvoiceItem {
   description String
   quantity    Float   @default(1)
   unitPrice   Float   @default(0)
+  unit        String? // 單位：篇、支、則、場、張…
+  isGroup     Boolean @default(false) // 分類標題列（只有說明文字）
   sort        Int     @default(0)
 }
 

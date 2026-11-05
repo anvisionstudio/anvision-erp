@@ -21,13 +21,16 @@ export const dt = (f: FormData, k: string) => {
 /** 讀取行項目編輯器送出的 items JSON */
 export function items(f: FormData) {
   const raw = str(f, "items") ?? "[]";
-  const arr = JSON.parse(raw) as { description: string; quantity: number; unitPrice: number; itemId?: string | null }[];
+  const arr = JSON.parse(raw) as { description: string; quantity: number; unitPrice: number; itemId?: string | null; unit?: string | null; isGroup?: boolean }[];
   return arr
     .filter((i) => i.description?.trim())
     .map((i, idx) => ({
       description: i.description.trim(),
-      quantity: Number(i.quantity) || 0,
-      unitPrice: Number(i.unitPrice) || 0,
+      // 分類標題列不計金額
+      quantity: i.isGroup ? 0 : Number(i.quantity) || 0,
+      unitPrice: i.isGroup ? 0 : Number(i.unitPrice) || 0,
+      unit: i.isGroup ? null : i.unit?.trim() || null,
+      isGroup: !!i.isGroup,
       itemId: i.itemId || null,
       sort: idx,
     }));
