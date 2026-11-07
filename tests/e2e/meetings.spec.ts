@@ -7,7 +7,7 @@ import { login } from "./helpers";
 test("快速做筆記，待辦以勾選框顯示", async ({ page }) => {
   await login(page);
   await page.goto("/");
-  await page.click('a:has-text("快速做筆記")');
+  await page.getByRole("link", { name: /^做筆記/ }).click();
   await page.fill("input[name=title]", "自動測試筆記");
   await page.fill("textarea[name=actions]", "[ ] 待辦一\n[x] 完成二");
   await page.click('button:has-text("儲存")');

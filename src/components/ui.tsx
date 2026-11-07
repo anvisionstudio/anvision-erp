@@ -142,3 +142,28 @@ export function Chip({ href, active, children }: { href: string; active?: boolea
     </Link>
   );
 }
+
+/**
+ * 進度條：百分比直接寫在條內（一行完成）。
+ * 數字貼著填滿的末端：50% 以上放在藍色內（白字），不到 50% 放在藍色後面（藍字），不會被切成兩半。
+ */
+export function Progress({ value, label, decimals = 0, className = "" }: { value: number; label: string; decimals?: number; className?: string }) {
+  const pct = Math.max(0, Math.min(100, value));
+  const text = `${pct.toFixed(decimals)}%`;
+  const inside = pct >= 50;
+  return (
+    <div
+      role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)} aria-valuetext={text}
+      className={`relative h-5 min-w-[4.5rem] overflow-hidden rounded-full bg-primary-soft ${className}`}
+    >
+      <div className="absolute inset-y-0 left-0 rounded-full bg-primary transition-[width] duration-300" style={{ width: `${pct}%` }} />
+      <span
+        aria-hidden
+        className={`absolute inset-y-0 flex items-center whitespace-nowrap text-xs font-semibold tabular-nums ${inside ? "text-primary-on" : "text-primary"}`}
+        style={inside ? { right: `calc(${100 - pct}% + 0.5rem)` } : { left: `calc(${pct}% + 0.375rem)` }}
+      >
+        {text}
+      </span>
+    </div>
+  );
+}

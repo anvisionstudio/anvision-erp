@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { twd, date } from "@/lib/format";
-import { PageHeader, Card, Badge, Empty, Tabs } from "@/components/ui";
+import { PageHeader, Card, Badge, Empty, Tabs, Progress } from "@/components/ui";
 import { FilterBar } from "@/components/filters";
 import { dateRange, href, pick } from "@/lib/filters";
 
@@ -50,7 +50,7 @@ export default async function Projects({ searchParams }: { searchParams: Promise
                   <td><Link href={`/projects/${p.id}`} className="link">{p.name}</Link></td>
                   <td>{p.client?.name ?? <span className="text-ink-muted">內部</span>}</td>
                   <td>{p.manager?.name}</td>
-                  <td className="w-32"><div className="h-1.5 rounded-full bg-surface-muted"><div className="h-1.5 rounded-full bg-brand-500" style={{ width: `${pct}%` }} /></div><div className="text-xs text-ink-muted">{pct}%</div></td>
+                  <td className="w-36"><Progress value={pct} label={`${p.name} 完成度`} /></td>
                   <td className={p.dueDate && p.dueDate < new Date() && p.status === "ACTIVE" ? "text-danger" : ""}>{date(p.dueDate)}</td>
                   <td className="num">{twd(p.budget)}</td>
                   <td><Badge status={p.status} /></td>

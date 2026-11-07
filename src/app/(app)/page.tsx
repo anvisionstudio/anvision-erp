@@ -1,12 +1,13 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, CalendarDays, Package, ListPlus, FolderPlus, NotebookPen, CalendarPlus, ListChecks, FolderKanban, Database, NotebookText, GanttChart, Square, Clock3 } from "lucide-react";
+import { ArrowRight, CalendarDays, Package, ListPlus, FolderPlus, NotebookPen, CalendarPlus, Square, Clock3 } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireUser, can } from "@/lib/auth";
 import { twd, date, num } from "@/lib/format";
 import { profitAndLoss, arAging } from "@/lib/reports";
-import { PageHeader, Card, Stat, Badge, Empty, Chip } from "@/components/ui";
+import { PageHeader, Card, Stat, Badge, Empty, Chip, Progress } from "@/components/ui";
 import { quickCheckTask } from "@/app/actions/projects";
+import { QuickBar } from "@/components/quick-bar";
 import { canManageProject } from "@/lib/perm";
 
 /** Notion 風格的區塊標題列 */
@@ -60,6 +61,19 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     }),
     projectsArea ? db.meeting.findMany({ orderBy: { date: "desc" }, take: 5, include: { project: { select: { name: true } } } }) : Promise.resolve([]),
   ]);
+  const counts = projectsArea
+    ? await Promise.all([
+        db.task.count({ where: { status: { not: "DONE" }, project: { status: { notIn: ["DONE", "CANCELLED"] } } } }),
+        db.project.count({ where: { status: { in: ["PLANNING", "ACTIVE", "ON_HOLD"] } } }),
+        can(user, "sales") ? db.client.count() : Promise.resolve(0),
+        db.meeting.count({ where: { date: { gte: weekStart, lt: weekEnd } } }),
+      ]).then(([openTasks, activeProjects, clients, meetingsWeek]) => ({ openTasks, activeProjects, clients, meetingsWeek }))
+    : { openTasks: 0, activeProjects: 0, clients: 0, meetingsWeek: 0 };
+  // 問候與日期以台灣時間為準（Vercel 主機是 UTC）
+  const tw = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", ...o }).format(now);
+  const hour = Number(tw({ hour: "numeric", hourCycle: "h23" }).replace(/\D/g, ""));
+  const greet = hour < 11 ? "早安" : hour < 18 ? "午安" : "晚安";
+  const lateCount = weekTasks.filter((t) => t.dueDate && t.dueDate.getTime() < now.getTime() - 864e5).length;
   const pl = finance ? await profitAndLoss(monthStart, now) : null;
   const ar = finance ? await arAging(now) : null;
   const ap = finance ? await db.expense.findMany({ where: { status: "UNPAID" } }) : [];
@@ -68,43 +82,32 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <PageHeader title={`早安，${user.name}`} sub={`${date(now)}　今天也辛苦了`} />
+      <PageHeader
+        title={`${greet}，${user.name}`}
+        sub={<>
+          {tw({ month: "long", day: "numeric" })}（{tw({ weekday: "narrow" })}）
+          {projectsArea && <>　本週 {weekTasks.length} 項待辦{lateCount > 0 && <>，<span className="font-medium text-danger">{lateCount} 項逾期</span></>}</>}
+        </>}
+      />
       {denied && <div className="mb-4 rounded-md bg-accent-soft px-4 py-2 text-sm text-accent">您沒有存取該模組的權限，如有需要請聯絡管理員。</div>}
 
       {projectsArea && (
         <>
-          <div className="mb-8 grid gap-6 md:grid-cols-[minmax(0,16rem)_1fr]">
-            <section aria-labelledby="quick">
-              <h2 id="quick" className="mb-3 text-lg font-semibold text-ink-muted">快速按鈕</h2>
-              <div className="flex flex-col items-start gap-2">
-                {[
-                  { href: "/tasks/team#assign", label: "快速加入任務", icon: ListPlus },
-                  ...(["ADMIN", "MANAGER"].includes(user.role) ? [{ href: "/projects/new", label: "快速加入專案", icon: FolderPlus }] : []),
-                  { href: "/meetings/new?kind=NOTE", label: "快速做筆記", icon: NotebookPen },
-                  { href: "/meetings/new", label: "快速會議記錄", icon: CalendarPlus },
-                ].map(({ href, label, icon: Icon }) => (
-                  <Link key={href} href={href} className="btn-secondary justify-start"><Icon className="h-4 w-4 text-primary" aria-hidden />{label}</Link>
-                ))}
-              </div>
-            </section>
-            <section aria-labelledby="shortcuts">
-              <h2 id="shortcuts" className="mb-3 text-lg font-semibold text-ink-muted">快捷頁面</h2>
-              <nav className="card flex flex-wrap items-center gap-x-1 gap-y-1 p-4">
-                {[
-                  { href: "/tasks/team", label: "任務總表", icon: ListChecks },
-                  { href: "/projects", label: "專案總管", icon: FolderKanban },
-                  { href: "/timeline", label: "時間軸", icon: GanttChart },
-                  ...(can(user, "sales") ? [{ href: "/clients", label: "資料庫", icon: Database }] : []),
-                  { href: "/meetings", label: "會議記錄", icon: NotebookText },
-                ].map(({ href, label, icon: Icon }, i) => (
-                  <span key={href} className="flex items-center">
-                    {i > 0 && <span className="mx-1 text-line" aria-hidden>|</span>}
-                    <Link href={href} className="inline-flex min-h-touch items-center gap-1.5 rounded-md px-2 font-medium hover:bg-surface-muted md:min-h-[2.25rem]"><Icon className="h-4 w-4 text-ink-muted" aria-hidden />{label}</Link>
-                  </span>
-                ))}
-              </nav>
-            </section>
-          </div>
+          <QuickBar
+            actions={[
+              { href: "/tasks/team#assign", label: "指派任務", hint: "交給成員並設定期限", icon: ListPlus },
+              ...(["ADMIN", "MANAGER"].includes(user.role) ? [{ href: "/projects/new", label: "建立專案", hint: "設定客戶、預算與負責人", icon: FolderPlus }] : []),
+              { href: "/meetings/new?kind=NOTE", label: "做筆記", hint: "隨手記下想法與待辦", icon: NotebookPen },
+              { href: "/meetings/new", label: "記錄會議", hint: "決策與未來行動項目", icon: CalendarPlus },
+            ]}
+            shortcuts={[
+              { href: "/tasks/team", label: "任務總表", count: counts.openTasks, unit: "項未完成" },
+              { href: "/projects", label: "專案總管", count: counts.activeProjects, unit: "個進行中" },
+              { href: "/timeline", label: "時間軸" },
+              ...(can(user, "sales") ? [{ href: "/clients", label: "客戶資料庫", count: counts.clients, unit: "位客戶" }] : []),
+              { href: "/meetings", label: "會議記錄", count: counts.meetingsWeek, unit: "筆本週" },
+            ]}
+          />
 
           <div className="mb-8 grid gap-6 xl:grid-cols-2">
             <section aria-label="本週任務" className="min-w-0">
@@ -151,11 +154,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                       return (
                         <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 sm:flex-nowrap">
                           <Mark name={p.name} />
-                          <Link href={`/projects/${p.id}`} className="min-w-0 flex-1 truncate font-medium hover:underline">{p.name}</Link>
-                          <span className="w-16 text-right text-sm tabular-nums">{pct.toFixed(2)}%</span>
-                          <span className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-muted" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`${p.name} 完成度`}>
-                            <span className="block h-full rounded-full bg-success" style={{ width: `${pct}%` }} />
-                          </span>
+                          <Link href={`/projects/${p.id}`} className="min-w-0 flex-1 basis-[calc(100%-2.25rem)] truncate font-medium hover:underline sm:basis-auto">{p.name}</Link>
+                          <Progress value={pct} decimals={2} label={`${p.name} 完成度`} className="flex-1 sm:w-36 sm:flex-none" />
                           <span className="w-20 text-right"><Badge status={p.status} /></span>
                         </li>
                       );

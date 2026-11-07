@@ -44,3 +44,16 @@ test("員工職位選單包含預設職位，外包會標示", async ({ page }) 
   await expect(page.locator("tbody")).toContainText("測試剪輯");
   await expect(page.locator("tbody")).toContainText("外包");
 });
+
+test("儀表板：快速新增列、前往捷徑帶數量、進度數字在進度條內", async ({ page }) => {
+  await login(page);
+  await page.goto("/");
+  for (const label of ["指派任務", "建立專案", "做筆記", "記錄會議"]) await expect(page.getByRole("link", { name: new RegExp(label) })).toBeVisible();
+  const nav = page.getByRole("navigation", { name: "前往" });
+  await expect(nav.getByRole("link", { name: /任務總表\s*\d+/ })).toBeVisible();
+  const bar = page.getByRole("progressbar", { name: "晨光咖啡 品牌識別重塑 完成度" });
+  await expect(bar).toHaveAttribute("aria-valuetext", /%$/);
+  await expect(bar).toContainText("%");
+  await page.goto("/projects");
+  await expect(page.getByRole("progressbar").first()).toContainText("%");
+});
