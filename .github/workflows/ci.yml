@@ -3,9 +3,8 @@
 name: CI
 
 on:
-  pull_request:
-  push:
-    branches: [main]
+  push: # 任何分支推送都檢查（main 與功能分支）
+  workflow_dispatch: # 也可在 GitHub Actions 頁面手動執行
 
 concurrency:
   group: ci-${{ github.ref }}
