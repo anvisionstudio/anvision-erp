@@ -18,11 +18,20 @@ async function main() {
   }
   const email = (process.env.ADMIN_EMAIL ?? "admin@anvision.studio").toLowerCase();
   const password = process.env.ADMIN_PASSWORD ?? "anvision1234";
+  // 忘記管理員密碼時：在 Vercel 設定 ADMIN_RESET_PASSWORD（至少 8 碼）並重新部署，
+  // 建置時會把此帳號的密碼改成這個值、恢復啟用與管理員角色。登入後請立刻刪除這個環境變數。
+  const reset = process.env.ADMIN_RESET_PASSWORD;
+  if (reset && reset.length < 8) console.warn("⚠ ADMIN_RESET_PASSWORD 至少要 8 碼，本次不重設");
+  const resetData = reset && reset.length >= 8 ? { passwordHash: await bcrypt.hash(reset, 10), active: true, role: "ADMIN" } : {};
   const admin = await db.user.upsert({
     where: { email },
-    create: { email, name: "管理員", role: "ADMIN", passwordHash: await bcrypt.hash(password, 10) },
-    update: {},
+    create: { email, name: "管理員", role: "ADMIN", passwordHash: await bcrypt.hash(reset && reset.length >= 8 ? reset : password, 10) },
+    update: resetData,
   });
+  if ("passwordHash" in resetData) {
+    console.log(`✓ 已重設 ${email} 的密碼（請登入後刪除 Vercel 的 ADMIN_RESET_PASSWORD）`);
+    await db.auditLog.create({ data: { userId: admin.id, action: "重設密碼（部署時）", entity: "使用者", entityId: admin.id, detail: email } });
+  }
   const settings: Record<string, string> = {
     "company.name": "Anvision Studio", "company.taxId": "", "company.address": "台北市",
     "company.phone": "", "company.email": "anvisionstudio@gmail.com", "company.bank": "（請至「公司與帳號」設定匯款資訊）",
