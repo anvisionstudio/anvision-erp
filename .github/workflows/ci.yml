@@ -1,0 +1,57 @@
+# 自動檢查：每次推送到分支或開 Pull Request 時執行
+# 型別檢查 → 建置 → 瀏覽器自動測試（使用全新的 SQLite 測試資料庫，不碰正式資料）
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: 型別檢查、建置、自動測試
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: file:./ci.db
+      SESSION_SECRET: ci-secret
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安裝套件
+        run: npm ci
+
+      - name: 產生資料庫程式碼
+        run: npx prisma generate
+
+      - name: 型別檢查
+        run: npm run typecheck
+
+      - name: 建置
+        run: npm run build
+
+      - name: 安裝測試用瀏覽器
+        run: npx playwright install --with-deps chromium
+
+      - name: 自動測試
+        run: npx playwright test
+
+      - name: 上傳測試報告（失敗時可下載查看截圖）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7

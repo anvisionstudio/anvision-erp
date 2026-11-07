@@ -6,7 +6,13 @@ import fs from "node:fs";
 
 const run = (cmd, env = {}) => execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
 const e = process.env;
-const pg = e.DATABASE_URL_UNPOOLED || e.POSTGRES_URL_NON_POOLING || e.DATABASE_URL || e.POSTGRES_PRISMA_URL || "";
+// 預覽部署（測試網址）絕不碰正式資料庫：只用 PREVIEW_DATABASE_URL（例如 Neon 分支），沒有就用示範資料。
+// 與 src/lib/db.ts 的 databaseUrl() 規則一致。
+const preview = e.VERCEL_ENV === "preview";
+const pg = preview
+  ? e.PREVIEW_DATABASE_URL || ""
+  : e.DATABASE_URL_UNPOOLED || e.POSTGRES_URL_NON_POOLING || e.DATABASE_URL || e.POSTGRES_PRISMA_URL || "";
+if (preview) console.log(pg ? "▶ 預覽部署：使用 PREVIEW_DATABASE_URL" : "▶ 預覽部署：未設定 PREVIEW_DATABASE_URL，使用示範資料（不會動到正式資料庫）");
 
 if (/^postgres(ql)?:/.test(pg)) {
   console.log("▶ 使用 PostgreSQL 正式資料庫");

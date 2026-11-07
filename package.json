@@ -10,7 +10,9 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "setup": "prisma db push && tsx prisma/seed.ts",
-    "vercel-build": "node scripts/vercel-build.mjs"
+    "vercel-build": "node scripts/vercel-build.mjs",
+    "test:e2e": "playwright test",
+    "check": "tsc --noEmit && npm run build && playwright test"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",
@@ -24,6 +26,7 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@types/bcryptjs": "2.4.6",
     "@types/node": "22.15.30",
     "@types/react": "19.1.8",

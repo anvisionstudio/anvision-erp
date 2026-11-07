@@ -1,7 +1,7 @@
 import { requireUser, can, ROLE_LABEL, type Area, type Role } from "@/lib/auth";
 import { Sidebar, type NavGroup } from "@/components/nav";
 import { logoutAction } from "../actions/auth";
-import { isDemo } from "@/lib/db";
+import { isDemo, isPreview } from "@/lib/db";
 
 const NAV: { title: string; items: { href: string; label: string; icon: string; area: Area }[] }[] = [
   { title: "總覽", items: [{ href: "/", label: "儀表板", icon: "dashboard", area: "dashboard" }] },
@@ -69,7 +69,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen">
       <Sidebar groups={groups} user={{ name: user.name, role: ROLE_LABEL[user.role as Role] ?? user.role }} logout={logoutAction} />
       <main id="main" tabIndex={-1} className="focus:outline-none lg:pl-60">
-        {isDemo && (
+        {isPreview ? (
+          <div role="status" className="no-print bg-primary-soft px-4 py-2 text-center text-sm text-primary">
+            測試網址（預覽版）：{isDemo ? "使用示範資料" : "使用測試資料庫"}，在這裡的操作不會影響正式系統。確認沒問題後再合併上線。
+          </div>
+        ) : isDemo && (
           <div role="status" className="no-print bg-accent-soft px-4 py-2 text-center text-sm text-accent">
             示範模式：資料不會永久保存，且可能在不同頁面間不一致。正式使用請在 Vercel 連接資料庫（Storage → Neon）。
           </div>

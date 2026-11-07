@@ -6,3 +6,7 @@ node_modules
 next-env.d.ts
 tsconfig.tsbuildinfo
 /*.csv
+
+# 自動測試
+/test-results
+/playwright-report
