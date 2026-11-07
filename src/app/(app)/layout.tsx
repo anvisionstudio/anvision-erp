@@ -55,6 +55,7 @@ const NAV: { title: string; items: { href: string; label: string; icon: string; 
       { href: "/settings/import", label: "Excel 帳務同步", icon: "sync", area: "finance" },
       { href: "/settings", label: "公司與帳號", icon: "settings", area: "admin" },
       { href: "/settings/audit", label: "操作紀錄", icon: "audit", area: "admin" },
+      { href: "/settings/system", label: "系統狀態", icon: "system", area: "admin" },
     ],
   },
 ];

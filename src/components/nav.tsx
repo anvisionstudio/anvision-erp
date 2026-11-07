@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   LayoutDashboard, Users, FileText, FolderKanban, ListChecks, Clock, Receipt, ArrowLeftRight, BookOpen, Hash,
-  BarChart3, GanttChart, UsersRound, Truck, ShoppingCart, Package, UserRound, CalendarDays, Wallet, RefreshCw, Settings, History, NotebookText, Menu, X, LogOut, UserCog,
+  BarChart3, GanttChart, UsersRound, Truck, ShoppingCart, Package, UserRound, CalendarDays, Wallet, RefreshCw, Settings, History, NotebookText, Activity, Menu, X, LogOut, UserCog,
   type LucideIcon,
 } from "lucide-react";
 
@@ -12,7 +12,7 @@ const ICONS: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard, clients: Users, quotes: FileText, projects: FolderKanban, tasks: ListChecks, time: Clock,
   invoices: Receipt, expenses: ArrowLeftRight, journal: BookOpen, accounts: Hash, reports: BarChart3, vendors: Truck,
   timeline: GanttChart, team: UsersRound, purchases: ShoppingCart, inventory: Package, employees: UserRound, leave: CalendarDays, payroll: Wallet, sync: RefreshCw,
-  settings: Settings, audit: History, meetings: NotebookText,
+  settings: Settings, audit: History, meetings: NotebookText, system: Activity,
 };
 
 export type NavGroup = { title: string; items: { href: string; label: string; icon: string }[] };

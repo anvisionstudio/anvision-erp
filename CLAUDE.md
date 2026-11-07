@@ -43,6 +43,11 @@
 - 職位清單存在設定 `hr.positions`（`src/lib/positions.ts`），外包職位標示「外包」
 - 會議記錄：Notion API（`NOTION_TOKEN`＋設定 `notion.meetingDbs`）或 Notion 匯出 CSV；依名稱自動對應專案
 
+## 錯誤與備份
+- 伺服器端未處理的錯誤由 `src/instrumentation.ts` → `src/lib/errors.ts` 記錄到 `ErrorLog`，管理員在「系統狀態」（/settings/system）查看；設定 `ERROR_WEBHOOK_URL` 會同步通知聊天群組
+- `/api/test-error` 只在 `E2E=1`（自動測試）時存在，用來驗證錯誤紀錄流程
+- 完整備份：`/api/backup`（僅管理員，JSON，不含密碼雜湊）；新增資料表會自動包含在備份內
+
 ## 已知狀況
 - Vercel 偶爾出現 `Resource provisioning timed out`（建置機器沒啟動，非程式問題）：重新部署即可
 - 自動測試中按下有確認視窗的按鈕前要 `page.on("dialog", d => d.accept())`

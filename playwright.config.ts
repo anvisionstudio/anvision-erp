@@ -30,7 +30,7 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 180_000,
     env: {
-      DATABASE_URL: db, SESSION_SECRET: "e2e-secret", NODE_ENV: "production", VERCEL_ENV: "",
+      DATABASE_URL: db, SESSION_SECRET: "e2e-secret", NODE_ENV: "production", VERCEL_ENV: "", E2E: "1", ERROR_WEBHOOK_URL: `http://localhost:${PORT + 1}/hook`,
       // 確保不會讀到正式資料庫的連線設定
       DATABASE_URL_UNPOOLED: "", POSTGRES_URL_NON_POOLING: "", POSTGRES_PRISMA_URL: "", PREVIEW_DATABASE_URL: "",
     },

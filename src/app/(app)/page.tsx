@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, CalendarDays, Package, ListPlus, FolderPlus, NotebookPen, CalendarPlus, Square, Clock3 } from "lucide-react";
+import { ArrowRight, CalendarDays, Package, ListPlus, FolderPlus, NotebookPen, CalendarPlus, Square, Clock3, AlertTriangle } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireUser, can } from "@/lib/auth";
 import { twd, date, num } from "@/lib/format";
@@ -74,6 +74,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const hour = Number(tw({ hour: "numeric", hourCycle: "h23" }).replace(/\D/g, ""));
   const greet = hour < 11 ? "早安" : hour < 18 ? "午安" : "晚安";
   const lateCount = weekTasks.filter((t) => t.dueDate && t.dueDate.getTime() < now.getTime() - 864e5).length;
+  const recentErrors = user.role === "ADMIN" ? await db.errorLog.count({ where: { createdAt: { gte: new Date(now.getTime() - 864e5) } } }) : 0;
   const pl = finance ? await profitAndLoss(monthStart, now) : null;
   const ar = finance ? await arAging(now) : null;
   const ap = finance ? await db.expense.findMany({ where: { status: "UNPAID" } }) : [];
@@ -89,6 +90,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           {projectsArea && <>　本週 {weekTasks.length} 項待辦{lateCount > 0 && <>，<span className="font-medium text-danger">{lateCount} 項逾期</span></>}</>}
         </>}
       />
+      {recentErrors > 0 && (
+        <Link href="/settings/system" className="mb-4 flex items-center gap-2 rounded-md bg-danger-soft px-4 py-2 text-sm text-danger hover:underline">
+          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />過去 24 小時系統發生 {recentErrors} 次錯誤，點此查看系統狀態
+        </Link>
+      )}
       {denied && <div className="mb-4 rounded-md bg-accent-soft px-4 py-2 text-sm text-accent">您沒有存取該模組的權限，如有需要請聯絡管理員。</div>}
 
       {projectsArea && (

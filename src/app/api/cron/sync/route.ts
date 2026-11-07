@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
     try {
       const r = await applyImport(await parseWorkbook(await downloadFromDrive(link)), null);
       out.excel = { entries: r.entries, invoices: r.invoices, unbalanced: r.unbalanced.length };
+      await db.auditLog.create({ data: { action: "自動同步", entity: "帳務", detail: `傳票 ${r.entries}・請款 ${r.invoices}${r.unbalanced.length ? `・${r.unbalanced.length} 張不平衡` : ""}` } });
     } catch (e) {
       failed = true;
       out.excel = { error: (e as Error).message };
@@ -30,7 +31,9 @@ export async function GET(req: NextRequest) {
   if (!notionConfigured() || !(await getNotionDbs()).length) out.notion = "skipped: not configured";
   else {
     try {
-      out.notion = await syncNotionMeetings();
+      const n = await syncNotionMeetings();
+      out.notion = n;
+      await db.auditLog.create({ data: { action: "自動同步", entity: "會議記錄", detail: `新增 ${n.created}・更新 ${n.updated}・未變更 ${n.skipped}` } });
     } catch (e) {
       failed = true;
       out.notion = { error: (e as Error).message };
